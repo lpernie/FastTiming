@@ -23,6 +23,7 @@
 #include "DataFormats/EcalDetId/interface/EEDetId.h"
 #include "DataFormats/EcalDetId/interface/EKDetId.h"
 #include "DataFormats/EgammaCandidates/interface/Photon.h"
+#include "FastTiming/Generic_Analizer/interface/FastTool.h"
 
 #define DEBUG
 #define PI 3.14159
@@ -52,18 +53,9 @@ class Generic_Analizer : public edm::EDAnalyzer {
 
     float GetTimeFromGamma( const reco::Photon*, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >& );
     float GetTimeFromJet( const reco::PFJet*, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >& );
-    float DeltaR(GlobalPoint, GlobalPoint);
-    float SmearTime(float time, float smearing);
     float FillLateralDevel( reco::PFCandidate, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >&, bool isSig );
     std::vector<float> GetSeedFromSC( bool isEB, reco::PFCandidate Gamma, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >&, bool atZero, bool HFill );
     float Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE );
-    double DeltaErre( double eta1, double eta2, double phi1, double phi2 );
-    float computeTOF( GlobalPoint, EBDetId );
-    float computeTOF( GlobalPoint, EKDetId );
-    float computeTOF( GlobalPoint Vtx, GlobalPoint Xtal );
-    float computeTOF( GlobalPoint Vtx, TLorentzVector Xtal );
-    inline float delta_phi(float phi1, float phi2);
-    inline float delta_eta(float eta1, float eta2);
     std::vector<DetId> getPFJetRecHitsDR(reco::PFCandidate pfCa, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE, const edm::EventSetup& iSetup);
     edm::InputTag fPFCands;
     edm::InputTag SimVtx_;
@@ -78,6 +70,7 @@ class Generic_Analizer : public edm::EDAnalyzer {
     double EE_LAYER_;
     double smearing_;
     TRandom *ranGaus_;
+    FastTool *FTool_;
     const CaloGeometry* geometry_;
     bool  debug;
     float Associated;

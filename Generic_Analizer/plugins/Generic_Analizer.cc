@@ -71,17 +71,8 @@
 #include "Geometry/Records/interface/CaloGeometryRecord.h"
 #include "Geometry/CaloGeometry/interface/TruncatedPyramid.h"
 
+#include "FastTiming/Generic_Analizer/interface/FastTool.h"
 #include "FastTiming/Generic_Analizer/plugins/Generic_Analizer.hh"
-
-inline float Generic_Analizer::delta_phi(float phi1, float phi2) {
-
-  float dphi = fabs(phi1 - phi2);
-  float sgn = (phi1 >= phi2 ? +1. : -1.);
-  return sgn * (dphi <= TMath::Pi() ? dphi : TMath::TwoPi() - dphi);
-}
-inline float Generic_Analizer::delta_eta(float eta1, float eta2) {
-  return (eta2 >= 0 ? eta1 - eta2 : eta2 - eta1);
-}
 
 using namespace std;
 using namespace edm;
@@ -275,6 +266,7 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
     }
   }
   ranGaus_ = new TRandom(0);
+  FTool_ = new FastTool( );
 }
 // ------------------------------------------------------------------------------------------
 Generic_Analizer::~Generic_Analizer(){
@@ -283,6 +275,7 @@ Generic_Analizer::~Generic_Analizer(){
     outfile->Close();
   }
   delete ranGaus_;
+  delete FTool_;
 }
 // ------------------------------------------------------------------------------------------
 void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
@@ -345,15 +338,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     edm::LogWarning("JetCHSSummary") << "JetsCHS not found";
   }
   //JetsCHS = JetProd.product();
-  // SimVertex
-  edm::Handle<edm::SimVertexContainer> SimVtx;
-  iEvent.getByLabel(SimVtx_, SimVtx);
-  if ( ! SimVtx.isValid() ) {
-    edm::LogWarning("SimVtxSummary") << "SimVtx not found";
-  }
-  edm::SimVertexContainer::const_iterator simVtxFirst = SimVtx->begin();
-  GlobalPoint Vtx_sim( simVtxFirst->position().x(), simVtxFirst->position().y(), simVtxFirst->position().z() );
-  float T0_Vtx_MC = simVtxFirst->position().t() * pow(10,9);
   // RecoVertex
   edm::Handle<std::vector<reco::Vertex>> RecoVtx;
   iEvent.getByLabel(RecoVtx_, RecoVtx);
@@ -363,18 +347,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   std::vector<reco::Vertex>::const_iterator recoVtxFirst = RecoVtx->begin();
   GlobalPoint Vtx_reco( recoVtxFirst->position().x(), recoVtxFirst->position().y(), recoVtxFirst->position().z() );
   h_NVtx->Fill( RecoVtx->size() );
-  //Rho
-  //edm::Handle<double> ak5PFJets_Rho;
-  //iEvent.getByLabel(ak5PFRho_, ak5PFJets_Rho);
-  //if ( !ak5PFJets_Rho.isValid() ) {
-  //  edm::LogWarning("RhoSummary") << "ak5PFJets_Rho not found";
-  //}
-  //h_Rh0->Fill(double(*ak5PFJets_Rho));
-  //float MyRho = -1;
-  //edm::Handle<double> ak5PFJets_rho;
-  //if( iEvent.getByLabel(edm::InputTag("ak5PFJets","rho","RECO"),ak5PFJets_rho) ) MyRho = *ak5PFJets_rho;
-  //else edm::LogWarning("RhoSummary") << "ak5PFJets_Rho not found";
-  //h_Rh0->Fill( MyRho );
   // GenJet
   edm::Handle<std::vector<reco::GenJet>> GenJetProd;
   iEvent.getByLabel(GenJet_, GenJetProd);
@@ -391,20 +363,30 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     edm::LogWarning("GenParSummary") << "GenPars not found";
   }
   GenPars = GenParProd.product();
+  // SimVertex
+  edm::Handle<edm::SimVertexContainer> SimVtx;
+  iEvent.getByLabel(SimVtx_, SimVtx);
+  if ( ! SimVtx.isValid() ) {
+    edm::LogWarning("SimVtxSummary") << "SimVtx not found";
+  }
+  FTool_->Inizialization( SimVtx );
+  GlobalPoint Vtx_sim( FTool_->GiveVtxX(), FTool_->GiveVtxY(), FTool_->GiveVtxZ() );
+  float T0_Vtx_MC = FTool_->GiveT0();
   //Jet Good
   vector<const reco::PFJet*> GoodJetList, BadJetList; GoodJetList.clear(); BadJetList.clear();
   float maxGenJetPt=0., maxGenJetEta=0;
   for (auto& pfGenJet : *GenJets){
     if( pfGenJet.p4().Pt() > maxGenJetPt ) { maxGenJetPt = pfGenJet.p4().Pt(); maxGenJetEta = fabs(pfGenJet.p4().Eta()); }
-    if( pfGenJet.p4().Pt() < 50. ) continue;
-    float DR_min = 0.08, DR_minH=99.;
+    if( pfGenJet.p4().Pt() < 15. ) continue;
+    float DR_min = 0.15, DR_minH=99.;
     GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
     const reco::PFJet* GoodJet = 0;
     for (auto& pfJet : *Jets){
-      if( pfJet.p4().Pt() < 35. ) continue;
+      if( pfJet.p4().Pt() < 15. ) continue;
 	GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
-	if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 ){
+	//if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 ){
+	if( DR<DR_min ){
 	  DR_min = DR;
 	  GoodJet = &pfJet;
 	}
@@ -415,19 +397,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     h_Jet_DR->Fill( DR_minH );
     if( GoodJet!=0 ) GoodJetList.push_back( GoodJet );
   }
-//  //######################################Alternative GOODJET
-//  GoodJetList.clear();
-//  const reco::PFJet* GoodJet = 0;
-//  float MinPt = 30.;
-//  for (auto& pfJet : *Jets){
-//    float JetPt = pfJet.p4().Pt();
-//    if( JetPt > MinPt ){
-//	MinPt  = JetPt;
-//	GoodJet = &pfJet;
-//    }
-//  }  
-//  if( GoodJet!=0 ) GoodJetList.push_back( GoodJet );
-//  //#######################################Alternative GOODJET
   h_PtGenJet->Fill( maxGenJetPt );
   h_EtaGenJet->Fill( maxGenJetEta );
   //Jet Bad
@@ -450,33 +419,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	BadJetList.push_back( thisJet );
     }
   }
-  //  for (auto& pfJet : *Jets){
-  //    //Pt Cut
-  //    if( sqrt( pow(pfJet.p4().Px(),2)+pow(pfJet.p4().Py(),2) ) < 15. ) continue;
-  //    GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
-  //    bool isSig = false, isPU = true;
-  //    float DR_min = 99.;
-  //    for (auto& pfGenJet : *GenJets){
-  //	if( pfGenJet.p4().Pt()<10. ) continue;
-  //	GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
-  //	float DR = DeltaR( PosJet, PosGenJet );
-  //	if( DR<DR_min ){
-  //	  DR_min = DR;
-  //	}
-  //	if( DR<0.08 && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 ){
-  //	  isSig = true;
-  //	}
-  //	if( DR<0.6 ){
-  //	  isPU = false;
-  //	}
-  //    }
-  //    h_Jet_DR->Fill( DR_min );
-  //    if( isSig ) GoodJetList.push_back( pfJet );
-  //    if( isPU ) BadJetList.push_back( pfJet );
-  //  }
+  
   for(int i=0; i<int(GoodJetList.size()); i++){
+    cout<<"i) "<<i<<endl;//####
     float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE );
     h_GoodJet_t->Fill( time );
+    cout<<"    -> "<<time<<" "<<fabs(GoodJetList[i]->p4().eta())<<endl;//####
     if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time );
     if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time );
     h_GoodJet_tEE->Fill( time );
@@ -723,10 +671,10 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	    }
 	    if( DR1>0.1 && DR2>0.1 ){ h_TimeGammaNOTAsso->Fill( BestTime ); h_TimeGammaNOTAssoW->Fill( BestTime, pfCand.energy() ); }
 	  }
-	  float TimeSmear_15 = SmearTime(BestTime, 0.015);
-	  float TimeSmear_30 = SmearTime(BestTime, 0.03);
-	  float TimeSmear_50 = SmearTime(BestTime, 0.05);
-	  float TimeSmear_500 = SmearTime(BestTime, 0.5);
+	  float TimeSmear_15 = SmearTime(BestTime, 0.015, ranGaus_);
+	  float TimeSmear_30 = SmearTime(BestTime, 0.03, ranGaus_);
+	  float TimeSmear_50 = SmearTime(BestTime, 0.05, ranGaus_);
+	  float TimeSmear_500 = SmearTime(BestTime, 0.5, ranGaus_);
 	  if( (TimeSmear_15<-0.05 || TimeSmear_15>0.13) ){
 	    SumEt_15cutted_pf = 0.;
 	    Total_SumEt_15cutted_pf =0.;
@@ -813,19 +761,19 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	  Associated_time_EB++;
 	  h_TimeGammaAssoEB->Fill( AssociatedTime_v1_noTime[BestIndex] ); h_TimeGammaAssoEB_L->Fill( AssociatedTime_v1_noTime[BestIndex] ); h_TimeGammaAssoEB_L2->Fill( AssociatedTime_v1_noTime[BestIndex] );
 	  h_PtGammaAssoEB->Fill( Associated_v1_noTime[BestIndex].Pt() ); h_EGammaAssoEB->Fill( Associated_v1_noTime[BestIndex].E() );
-	  h_TimeGammaAssoEB_sme15->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.015) );
-	  h_TimeGammaAssoEB_sme30->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.03) );
-	  h_TimeGammaAssoEB_sme50->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.05) );
-	  h_TimeGammaAssoEB_sme500->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.5) );
+	  h_TimeGammaAssoEB_sme15->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.015, ranGaus_) );
+	  h_TimeGammaAssoEB_sme30->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.03, ranGaus_) );
+	  h_TimeGammaAssoEB_sme50->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.05, ranGaus_) );
+	  h_TimeGammaAssoEB_sme500->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.5, ranGaus_) );
 	}
 	if( fabs(Associated_v1_noTime[BestIndex].Eta())>1.48 ){
 	  Associated_time_EE++;
 	  h_TimeGammaAssoEE->Fill( AssociatedTime_v1_noTime[BestIndex] ); h_TimeGammaAssoEE_L->Fill( AssociatedTime_v1_noTime[BestIndex] ); h_TimeGammaAssoEE_L2->Fill( AssociatedTime_v1_noTime[BestIndex] );
 	  h_PtGammaAssoEE->Fill( Associated_v1_noTime[BestIndex].Pt() ); h_EGammaAssoEE->Fill(Associated_v1_noTime[BestIndex].E() );
-	  h_TimeGammaAssoEE_sme15->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.015) );
-	  h_TimeGammaAssoEE_sme30->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.03) );
-	  h_TimeGammaAssoEE_sme50->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.05) );
-	  h_TimeGammaAssoEE_sme500->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.5) );
+	  h_TimeGammaAssoEE_sme15->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.015, ranGaus_) );
+	  h_TimeGammaAssoEE_sme30->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.03, ranGaus_) );
+	  h_TimeGammaAssoEE_sme50->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.05, ranGaus_) );
+	  h_TimeGammaAssoEE_sme500->Fill(SmearTime(AssociatedTime_v1_noTime[BestIndex], 0.5, ranGaus_) );
 	}
     }
     //Best Associated Gamma2 No Time 
@@ -848,19 +796,19 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	  Associated_time_EB++;
 	  h_TimeGammaAssoEB->Fill( AssociatedTime_v2_noTime[BestIndex] ); h_TimeGammaAssoEB_L->Fill( AssociatedTime_v2_noTime[BestIndex] ); h_TimeGammaAssoEB_L2->Fill( AssociatedTime_v2_noTime[BestIndex] );
 	  h_PtGammaAssoEB->Fill( Associated_v2_noTime[BestIndex].Pt() ); h_EGammaAssoEB->Fill( Associated_v2_noTime[BestIndex].E() );
-	  h_TimeGammaAssoEB_sme15->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.015) );
-	  h_TimeGammaAssoEB_sme30->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.03) );
-	  h_TimeGammaAssoEB_sme50->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.05) );
-	  h_TimeGammaAssoEB_sme500->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.5) );
+	  h_TimeGammaAssoEB_sme15->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.015, ranGaus_) );
+	  h_TimeGammaAssoEB_sme30->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.03, ranGaus_) );
+	  h_TimeGammaAssoEB_sme50->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.05, ranGaus_) );
+	  h_TimeGammaAssoEB_sme500->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.5, ranGaus_) );
 	}
 	if( fabs(Associated_v2_noTime[BestIndex].Eta())>1.48 ){
 	  Associated_time_EE++;
 	  h_TimeGammaAssoEE->Fill( AssociatedTime_v2_noTime[BestIndex] ); h_TimeGammaAssoEE_L->Fill( AssociatedTime_v2_noTime[BestIndex] ); h_TimeGammaAssoEE_L2->Fill( AssociatedTime_v2_noTime[BestIndex] );
 	  h_PtGammaAssoEE->Fill( Associated_v2_noTime[BestIndex].Pt() ); h_EGammaAssoEE->Fill(Associated_v2_noTime[BestIndex].E() );
-	  h_TimeGammaAssoEE_sme15->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.015) );
-	  h_TimeGammaAssoEE_sme30->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.03) );
-	  h_TimeGammaAssoEE_sme50->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.05) );
-	  h_TimeGammaAssoEE_sme500->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.5) );
+	  h_TimeGammaAssoEE_sme15->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.015, ranGaus_) );
+	  h_TimeGammaAssoEE_sme30->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.03, ranGaus_) );
+	  h_TimeGammaAssoEE_sme50->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.05, ranGaus_) );
+	  h_TimeGammaAssoEE_sme500->Fill(SmearTime(AssociatedTime_v2_noTime[BestIndex], 0.5, ranGaus_) );
 	}
     }
 
@@ -1024,20 +972,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }//if DoMass_
 }//End Analyzer
 
-// ------------------------------------------------------------------------------------------
-float Generic_Analizer::DeltaR( GlobalPoint a, GlobalPoint b ){
-  float deltaEta = a.eta() - b.eta();
-  float deltaPhi = a.phi() - b.phi();
-  if (deltaPhi > PI)  deltaPhi -= 2.*PI;
-  if (deltaPhi < -PI) deltaPhi += 2.*PI;
-  return( sqrt( deltaEta*deltaEta + deltaPhi*deltaPhi  ) );
-}
-
-float Generic_Analizer::SmearTime(float time, float smearing)
-{
-  float smearedTime = ranGaus_->Gaus(time, smearing);
-  return smearedTime;
-}
 //------------------------------------------------------------------------------------------------
 float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits )
 {
@@ -1123,8 +1057,8 @@ float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm
 		RecPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
 	    }
 	    float time = My_rec->time();
-	    float deltaEr = DeltaErre( V_PFPos[nClu].eta(), RecPos.eta(), V_PFPos[nClu].phi(), RecPos.phi() );
-	    //float deltaEr = DeltaErre( V_cluster[nClu]->eta(), RecPos.eta(), V_cluster[nClu]->phi(), RecPos.phi() );
+	    float deltaEr = DeltaR( V_PFPos[nClu].eta(), RecPos.eta(), V_PFPos[nClu].phi(), RecPos.phi() );
+	    //float deltaEr = DeltaR( V_cluster[nClu]->eta(), RecPos.eta(), V_cluster[nClu]->phi(), RecPos.phi() );
 	    float DR_step = 0.017;
 	    if( My_rec->energy() > Min_ene ){ if( time>Cut_MIN[int(deltaEr/DR_step)] && time<Cut_MAX[int(deltaEr/DR_step)] ) AfterCut += My_rec->energy(); }
 	    else AfterCut += My_rec->energy();
@@ -1671,7 +1605,7 @@ std::vector<DetId> Generic_Analizer::getPFJetRecHitsDR(reco::PFCandidate pfCa, e
     double etarechit =  pos.eta();
     double phirechit =  pos.phi();
 
-    double dr = sqrt(delta_phi(phijet,phirechit)*delta_phi(phijet,phirechit)+delta_eta(etajet,etarechit)*delta_eta(etajet,etarechit));
+    double dr = sqrt(Delta_phi(phijet,phirechit)*Delta_phi(phijet,phirechit)+Delta_eta(etajet,etarechit)*Delta_eta(etajet,etarechit));
     if(dr>0.5)continue;
     PFrechitsId.push_back(myhit.id());
   }
@@ -1690,50 +1624,13 @@ std::vector<DetId> Generic_Analizer::getPFJetRecHitsDR(reco::PFCandidate pfCa, e
     GlobalPoint pos = theGeometry->getPosition((myhit).detid());
     double etarechit =  pos.eta();
     double phirechit =  pos.phi();
-    double dr = sqrt(delta_phi(phijet,phirechit)*delta_phi(phijet,phirechit)+delta_eta(etajet,etarechit)*delta_eta(etajet,etarechit));
+    double dr = sqrt(Delta_phi(phijet,phirechit)*Delta_phi(phijet,phirechit)+Delta_eta(etajet,etarechit)*Delta_eta(etajet,etarechit));
     if(dr>0.5)continue;
     PFrechitsId.push_back(myhit.id());
   }
   return PFrechitsId;
 }
 
-double Generic_Analizer::DeltaErre( double eta1, double eta2, double phi1, double phi2 ){
-  float deltaPhi = eta1 - eta2;
-  float deltaEta = phi1 - phi2;
-  if (deltaPhi > PI)  deltaPhi -= 2.*PI;
-  if (deltaPhi < -PI) deltaPhi += 2.*PI;
-  return sqrt(deltaEta*deltaEta+deltaPhi*deltaPhi);
-}
-
-// ------------------------------------------------------------------------------------------
-float Generic_Analizer::computeTOF( GlobalPoint Vtx, EBDetId IdXtal )
-{
-  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-  GlobalPoint Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_ );
-  GlobalPoint Dist( Xtal.x()-Vtx.x(),  Xtal.y()-Vtx.y(),  Xtal.z()-Vtx.z() );
-  float TOF = sqrt( Dist.x()*Dist.x() + Dist.y()*Dist.y() + Dist.z()*Dist.z() ) / LIGHT_SPEED;
-  return TOF;
-}
-float Generic_Analizer::computeTOF( GlobalPoint Vtx, EKDetId IdXtal )
-{
-  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-  GlobalPoint Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
-  GlobalPoint Dist( Xtal.x()-Vtx.x(),  Xtal.y()-Vtx.y(),  Xtal.z()-Vtx.z() );
-  float TOF = sqrt( Dist.x()*Dist.x() + Dist.y()*Dist.y() + Dist.z()*Dist.z() ) / LIGHT_SPEED;
-  return TOF;
-}
-float Generic_Analizer::computeTOF( GlobalPoint Vtx, GlobalPoint Xtal )
-{
-  GlobalPoint Dist( Xtal.x()-Vtx.x(),  Xtal.y()-Vtx.y(),  Xtal.z()-Vtx.z() );
-  float TOF = sqrt( Dist.x()*Dist.x() + Dist.y()*Dist.y() + Dist.z()*Dist.z() ) / LIGHT_SPEED;
-  return TOF;
-}
-float Generic_Analizer::computeTOF( GlobalPoint Vtx, TLorentzVector Xtal )
-{
-  GlobalPoint Dist( Xtal.X()-Vtx.x(),  Xtal.Y()-Vtx.y(),  Xtal.Z()-Vtx.z() );
-  float TOF = sqrt( Dist.x()*Dist.x() + Dist.y()*Dist.y() + Dist.z()*Dist.z() ) / LIGHT_SPEED;
-  return TOF;
-}
 // ------------------------------------------------------------------------------------------
 void Generic_Analizer::beginRun(edm::Run&, edm::EventSetup const&) {
 }
