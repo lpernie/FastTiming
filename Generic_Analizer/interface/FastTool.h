@@ -15,6 +15,23 @@
 #include "TLorentzVector.h"
 #include <cstring>
 #include <sstream>
+#include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
+#include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
+#include "DataFormats/ParticleFlowCandidate/interface/PFCandidateFwd.h"
+#include "DataFormats/EgammaCandidates/interface/Photon.h"
+#include "DataFormats/EgammaReco/interface/SuperCluster.h"
+#include "DataFormats/ParticleFlowReco/interface/PFRecHit.h"
+#include "DataFormats/ParticleFlowReco/interface/PFBlock.h"
+#include "DataFormats/ParticleFlowReco/interface/PFBlockFwd.h"
+#include "DataFormats/ParticleFlowReco/interface/PFCluster.h"
+#include "DataFormats/ParticleFlowReco/interface/PFClusterFwd.h"
+#include "DataFormats/CaloRecHit/interface/CaloCluster.h"
+#include "DataFormats/JetReco/interface/PFJet.h"
+#include "DataFormats/JetReco/interface/PFJetCollection.h"
+#include "DataFormats/TrackReco/interface/Track.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/Records/interface/TransientTrackRecord.h"
+#include "Geometry/TrackerGeometryBuilder/interface/TrackerGeometry.h"
 #include "DataFormats/EcalDetId/interface/EBDetId.h"
 #include "DataFormats/EcalDetId/interface/EEDetId.h"
 #include "DataFormats/EcalDetId/interface/EKDetId.h"
@@ -24,9 +41,12 @@
 #include "SimDataFormats/Vertex/interface/SimVertex.h"
 #include "SimDataFormats/Vertex/interface/SimVertexContainer.h"
 #include "DataFormats/VertexReco/interface/Vertex.h"
-#include "FastTiming/Generic_Analizer/interface/FastTool.h"
 #define PI 3.14159
 #define LIGHT_SPEED 29.9792458 //[cm/ns]
+
+using namespace std;
+using namespace edm;
+using namespace reco;
 
 class FastTool{
 
@@ -45,6 +65,91 @@ class FastTool{
     float VtxY_;
     float VtxZ_;
 };
+
+float GetTimeFromJet( const reco::PFJet *PFJets, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
+{
+  float finalTime=-999., minE=0.;
+  std::vector <reco::PFCandidatePtr> PFCand = PFJets->getPFConstituents();
+  for(unsigned int i=0; i<PFCand.size(); i++){
+    PFCandidate MY_cand(PFCand[i]);
+    std::vector<EcalRecHit> V_seeds; V_seeds.clear(); std::vector<reco::PFClusterRef> V_cluster; V_cluster.clear();
+    const EcalRecHit* seedHit = 0;
+    double maxClusterEnergy = 0.;
+    for (auto& blockPair : MY_cand.elementsInBlocks()){
+	unsigned int pos = blockPair.second;
+	const reco::PFBlockElement& blockElement = blockPair.first->elements()[pos];
+	{
+	  if (blockElement.type() != 4)
+	    continue;
+	  reco::PFClusterRef cluster = blockElement.clusterRef();
+	  if (cluster.isAvailable())
+	  {
+	    if (cluster->energy() > maxClusterEnergy)
+		maxClusterEnergy = cluster->energy();
+	    DetId seedID = cluster->seed();
+	    if (cluster->layer() == PFLayer::ECAL_BARREL){
+		for (auto& rhEB : *theBarrelEcalRecHits){
+		  if (rhEB.id() == seedID){
+		    seedHit = &rhEB;
+		  }
+		}
+	    }
+	    else if (cluster->layer() == PFLayer::ECAL_ENDCAP){
+		for (auto& rhEE : *theEndcapEcalRecHits){
+		  if (rhEE.id() == seedID){
+		    seedHit = &rhEE;
+		  }
+		}
+	    }
+	    if(seedHit){ V_seeds.push_back( *seedHit ); V_cluster.push_back( cluster ); }
+	  }
+	}
+    }//All Blocks
+    //Now Select the bigger cluster into the SC
+    float BestTime = -1, BestEne = -1, Emin=0;
+    for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
+	if( V_cluster[nClu]->energy() > Emin ){
+	  Emin = V_cluster[nClu]->energy(); //Take seed from most energetic cluster
+	  BestTime = V_seeds[nClu].time(); BestEne = V_seeds[nClu].energy();
+	  //cout<<"Looking into the clusters of this PFCand: time: "<<V_seeds[nClu].time()<<" ene seed: "<<V_seeds[nClu].energy()<<" eene clu: "<<V_cluster[nClu]->energy()<<endl;
+	}
+    }
+    //cout<<" I took: "<<BestTime<<" clu size: "<<int(V_cluster.size())<<endl;
+    if( BestTime==-1 ) continue;
+    if(BestEne>minE){
+	//cout<<"  And to PF I giveit !: "<<BestTime<<endl;
+	minE = BestEne;
+	finalTime = BestTime;
+    }
+  }//End PFCand Loop
+  //cout<<"   final time "<<finalTime<<endl;
+  return finalTime;
+}
+
+float GetTimeFromGamma( const reco::Photon* photon, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
+{
+  float ThisTime=-99;
+  const EcalRecHit* seedHit = 0;
+  DetId seedId = photon->superCluster()->seed()->seed();
+  if( photon->isEB() ){
+    for (auto& rhEB : *theBarrelEcalRecHits){
+	if (rhEB.id() == seedId ){
+	  seedHit = &rhEB;
+	}
+    }
+  }
+  else{
+    for (auto& rhEE : *theEndcapEcalRecHits){
+	if (rhEE.id() == seedId ){
+	  seedHit = &rhEE;
+	}
+    }
+  }
+  if(seedHit){
+    ThisTime = seedHit->time();
+  }
+  return ThisTime;
+}
 
 float computeTOF( GlobalPoint Vtx, EBDetId IdXtal, const CaloGeometry* geometry, float EB_LAYER  ){
   const CaloCellGeometry* cell=geometry->getGeometry(IdXtal);

@@ -51,8 +51,6 @@ class Generic_Analizer : public edm::EDAnalyzer {
     virtual void beginLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&);
     virtual void endLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&);
 
-    float GetTimeFromGamma( const reco::Photon*, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >& );
-    float GetTimeFromJet( const reco::PFJet*, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >& );
     float FillLateralDevel( reco::PFCandidate, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >&, bool isSig );
     std::vector<float> GetSeedFromSC( bool isEB, reco::PFCandidate Gamma, edm::Handle<edm::SortedCollection<EcalRecHit> >&, edm::Handle<edm::SortedCollection<EcalRecHit> >&, bool atZero, bool HFill );
     float Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE );
@@ -91,6 +89,7 @@ class Generic_Analizer : public edm::EDAnalyzer {
     bool DoMass_;
     string OutName_;
     TFile*outfile;
+    TH1F *h_EventFlow;
     TH1F *h_SumEt;
     TH1F *h_SumEt_cut;
     TH1F *h_SumEt_15cut;

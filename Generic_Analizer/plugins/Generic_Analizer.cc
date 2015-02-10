@@ -103,9 +103,11 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
 #ifdef DEBUG
   debug = true;
 #endif
-  if(debug){
+    if(debug) cout<<"DEBUG mode selected."<<endl;
     outfile = new TFile(OutName_.c_str(),"RECREATE");
     outfile->cd();
+    h_EventFlow          = new TH1F("h_EventFlow", "", 5, -0.5, 4.5);
+    h_EventFlow->GetXaxis()->SetBinLabel(1,"Events"); h_EventFlow->GetXaxis()->SetBinLabel(2,"MC Jets"); h_EventFlow->GetXaxis()->SetBinLabel(3,"RECO Jets"); h_EventFlow->GetXaxis()->SetBinLabel(4,"MC Phot"); h_EventFlow->GetXaxis()->SetBinLabel(5,"RECO Phot");
     h_SumEt_cut          = new TH1F("h_SumEt_cut", "", 1000, 0., 2000.);
     h_SumEt_15cut        = new TH1F("h_SumEt_15cut", "", 1000, 0., 2000.);
     h_SumEt_30cut        = new TH1F("h_SumEt_30cut", "", 1000, 0., 2000.);
@@ -264,23 +266,20 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
       Tree_Vtx->Branch("vyRECO",&vyRECO,"vyRECO/F");
       Tree_Vtx->Branch("vxRECO",&vxRECO,"vxRECO/F");
     }
-  }
   ranGaus_ = new TRandom(0);
   FTool_ = new FastTool( );
 }
 // ------------------------------------------------------------------------------------------
 Generic_Analizer::~Generic_Analizer(){
-  if(debug){
     outfile->Write();
     outfile->Close();
-  }
   delete ranGaus_;
   delete FTool_;
 }
 // ------------------------------------------------------------------------------------------
 void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
-
+  //-------------------------------------------------LOAD Collections--------------------------------------------------------------
   // Get PFCandidate Collection
   edm::Handle<reco::PFCandidateCollection> hPFProduct;
   iEvent.getByLabel(fPFCands, hPFProduct);
@@ -330,14 +329,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     edm::LogWarning("JetSummary") << "Jets not found";
   }
   Jets = JetProd.product();
-  // JetCHS
-  edm::Handle<std::vector<reco::PFJet>> JetCHSProd;
-  iEvent.getByLabel(JetCHS_, JetCHSProd);
-  //const reco::PFJetCollection *JetsCHS = 0;
-  if ( ! JetCHSProd.isValid() ) {
-    edm::LogWarning("JetCHSSummary") << "JetsCHS not found";
-  }
-  //JetsCHS = JetProd.product();
   // RecoVertex
   edm::Handle<std::vector<reco::Vertex>> RecoVtx;
   iEvent.getByLabel(RecoVtx_, RecoVtx);
@@ -372,23 +363,27 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   FTool_->Inizialization( SimVtx );
   GlobalPoint Vtx_sim( FTool_->GiveVtxX(), FTool_->GiveVtxY(), FTool_->GiveVtxZ() );
   float T0_Vtx_MC = FTool_->GiveT0();
-  //Jet Good
+  //-------------------------------Let's START-------------------------------------------
+  h_EventFlow->Fill(0);
+  //Good Jets list
   vector<const reco::PFJet*> GoodJetList, BadJetList; GoodJetList.clear(); BadJetList.clear();
   float maxGenJetPt=0., maxGenJetEta=0;
   for (auto& pfGenJet : *GenJets){
     if( pfGenJet.p4().Pt() > maxGenJetPt ) { maxGenJetPt = pfGenJet.p4().Pt(); maxGenJetEta = fabs(pfGenJet.p4().Eta()); }
-    if( pfGenJet.p4().Pt() < 15. ) continue;
-    float DR_min = 0.15, DR_minH=99.;
+    if( pfGenJet.p4().Pt() < 20. ) continue;
+    h_EventFlow->Fill(1);
+    float DR_min = 0.2, DR_minH=99.;
     GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
     const reco::PFJet* GoodJet = 0;
     for (auto& pfJet : *Jets){
       if( pfJet.p4().Pt() < 15. ) continue;
-	GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
+	GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
-	//if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 ){
+	//if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 )
 	if( DR<DR_min ){
 	  DR_min = DR;
 	  GoodJet = &pfJet;
+	  h_EventFlow->Fill(2);
 	}
 	if( DR<DR_minH ){
 	  DR_minH = DR;
@@ -399,9 +394,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   h_PtGenJet->Fill( maxGenJetPt );
   h_EtaGenJet->Fill( maxGenJetEta );
-  //Jet Bad
+  //Bad Jets list
   for (auto& pfJet : *Jets){
-    //Pt Cut
     if( sqrt( pow(pfJet.p4().Px(),2)+pow(pfJet.p4().Py(),2) ) < 25. ) continue;
     GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
     bool isPU = true;
@@ -419,15 +413,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	BadJetList.push_back( thisJet );
     }
   }
-  
+  //Plot with good and bad jets
   for(int i=0; i<int(GoodJetList.size()); i++){
-    cout<<"i) "<<i<<endl;//####
     float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE );
-    h_GoodJet_t->Fill( time );
-    cout<<"    -> "<<time<<" "<<fabs(GoodJetList[i]->p4().eta())<<endl;//####
-    if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time );
-    if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time );
-    h_GoodJet_tEE->Fill( time );
+    h_GoodJet_t->Fill( time-T0_Vtx_MC );
+    if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time-T0_Vtx_MC );
+    if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time-T0_Vtx_MC );
     h_EffEtaTot_jet->Fill( fabs(GoodJetList[i]->p4().eta()) );
     h_EffPtTot_jet->Fill( GoodJetList[i]->pt() );
     if( time>-0.5 && time < 0.5 )  h_EffEta_jet1->Fill( fabs(GoodJetList[i]->p4().eta()) );
@@ -442,10 +433,11 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     if( time> 0.0 && time < 0.1 )  h_NEffEta_jet2->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_NEffEta_jet3->Fill( fabs(BadJetList[i]->p4().eta()) );
   }
-  //Good Photons
+  //Good Photons list
   vector<const reco::Photon*> GoodPhotList, BadPhotList; GoodPhotList.clear(); BadPhotList.clear();
   for (auto& GenPar : *GenPars){
     if( GenPar.p4().Pt() < 25. ) continue;
+    h_EventFlow->Fill(3);
     float DR_min = 0.03, DR_minH=99.;
     const reco::Photon* GoodPhot = 0;
     GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
@@ -455,6 +447,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	if( DR<DR_min && GenPar.p4().Pt()/photon.p4().Pt()<1.3 && GenPar.p4().Pt()/photon.p4().Pt()>0.7 ){
 	  DR_min = DR;
 	  GoodPhot = &photon;
+	  h_EventFlow->Fill(5);
 	}
 	if( DR<DR_minH ){
 	  DR_minH = DR;
@@ -482,32 +475,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	BadPhotList.push_back( thisPhoto );
     }
   }
-  //    vector<reco::Photon> GoodPhotList; GoodPhotList.clear();
-  //    vector<reco::Photon> BadPhotList; BadPhotList.clear();
-  //    for (auto& photon : *Photons){
-  //      //Pt Cut
-  //      if( sqrt( pow(photon.p4().Px(),2)+pow(photon.p4().Py(),2) ) < 15. ) continue;
-  //      GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
-  //      bool isSig = false, isPU = true;
-  //      float DR_min = 99.;
-  //      for (auto& GenPar : *GenPars){
-  //  	GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
-  //  	if( GenPar.p4().Pt()<10. ) continue;
-  //  	float DR = DeltaR( PosPhot, PosGenJet );
-  //  	if( DR<DR_min ){
-  //  	  DR_min = DR;
-  //  	}
-  //  	if( DR<0.02 && GenPar.p4().Pt()/photon.p4().Pt()<1.3 && GenPar.p4().Pt()/photon.p4().Pt()>0.7 ){
-  //  	  isSig = true;
-  //  	}
-  //  	if( DR<0.05 ){
-  //  	  isPU = false;
-  //  	}
-  //      }
-  //      h_Phot_DR->Fill( DR_min );
-  //      if( isSig ) GoodPhotList.push_back( photon );
-  //      if( isPU )  BadPhotList.push_back( photon );
-  //    }
+  //Plots with Good and Bad photons
   for(int i=0; i<int(GoodPhotList.size()); i++){
     float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE );
     h_GoodGamma_t->Fill( time );
@@ -970,6 +938,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     isRecon = gamma_reco1.Pt()>15. && gamma_reco2.Pt()>15 && fabs(gamma_reco1.Pt()-Gamma1.Pt())/Gamma1.Pt()<0.35 && fabs(gamma_reco2.Pt()-Gamma2.Pt())/Gamma2.Pt()<0.35;
     if( isRecon ) h_HiggsMass->Fill( (gamma_reco1+gamma_reco2).M() );
   }//if DoMass_
+
 }//End Analyzer
 
 //------------------------------------------------------------------------------------------------
@@ -1069,92 +1038,6 @@ float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm
   float PU_frac = (TotalE==0.) ? 0. : float(AfterCut/TotalE);
   return PU_frac;
 }
-//-------------------------------------------------------------------------------------------------------
-float Generic_Analizer::GetTimeFromGamma( const reco::Photon* photon, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
-{
-  float ThisTime=-99;
-  const EcalRecHit* seedHit = 0;
-  DetId seedId = photon->superCluster()->seed()->seed();
-  if( photon->isEB() ){
-    for (auto& rhEB : *theBarrelEcalRecHits){
-	if (rhEB.id() == seedId ){
-	  seedHit = &rhEB;
-	}
-    }
-  }
-  else{
-    for (auto& rhEE : *theEndcapEcalRecHits){
-	if (rhEE.id() == seedId ){
-	  seedHit = &rhEE;
-	}
-    }
-  }
-  if(seedHit){
-    ThisTime = seedHit->time();
-  }
-  return ThisTime;
-}
-//-------------------------------------------------------------------------------------------------------
-float Generic_Analizer::GetTimeFromJet( const reco::PFJet *PFJets, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
-{
-  float finalTime=-999., minE=0.;
-  std::vector <reco::PFCandidatePtr> PFCand = PFJets->getPFConstituents();
-  for(unsigned int i=0; i<PFCand.size(); i++){
-    PFCandidate MY_cand(PFCand[i]);
-    std::vector<EcalRecHit> V_seeds; V_seeds.clear(); std::vector<reco::PFClusterRef> V_cluster; V_cluster.clear();
-    const EcalRecHit* seedHit = 0;
-    double maxClusterEnergy = 0.;
-    for (auto& blockPair : MY_cand.elementsInBlocks()){
-	unsigned int pos = blockPair.second;
-	const reco::PFBlockElement& blockElement = blockPair.first->elements()[pos];
-	{
-	  if (blockElement.type() != 4)
-	    continue;
-	  reco::PFClusterRef cluster = blockElement.clusterRef();
-	  if (cluster.isAvailable())
-	  {
-	    if (cluster->energy() > maxClusterEnergy)
-		maxClusterEnergy = cluster->energy();
-	    DetId seedID = cluster->seed();
-	    if (cluster->layer() == PFLayer::ECAL_BARREL){
-		for (auto& rhEB : *theBarrelEcalRecHits){
-		  if (rhEB.id() == seedID){
-		    seedHit = &rhEB;
-		  }
-		}
-	    }
-	    else if (cluster->layer() == PFLayer::ECAL_ENDCAP){
-		for (auto& rhEE : *theEndcapEcalRecHits){
-		  if (rhEE.id() == seedID){
-		    seedHit = &rhEE;
-		  }
-		}
-	    }
-	    if(seedHit){ V_seeds.push_back( *seedHit ); V_cluster.push_back( cluster ); }
-	  }
-	}
-    }//All Blocks
-    //Now Select the bigger cluster into the SC
-    float BestTime = -1, BestEne = -1, Emin=0;
-    for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
-	if( V_cluster[nClu]->energy() > Emin ){
-	  Emin = V_cluster[nClu]->energy(); //Take seed from most energetic cluster
-	  BestTime = V_seeds[nClu].time(); BestEne = V_seeds[nClu].energy();
-	  //cout<<"Looking into the clusters of this PFCand: time: "<<V_seeds[nClu].time()<<" ene seed: "<<V_seeds[nClu].energy()<<" eene clu: "<<V_cluster[nClu]->energy()<<endl;
-	}
-    }
-    //cout<<" I took: "<<BestTime<<" clu size: "<<int(V_cluster.size())<<endl;
-    if( BestTime==-1 ) continue;
-    if(BestEne>minE){
-	//cout<<"  And to PF I giveit !: "<<BestTime<<endl;
-	minE = BestEne;
-	finalTime = BestTime;
-    }
-  }//End PFCand Loop
-  //cout<<"   final time "<<finalTime<<endl;
-  return finalTime;
-}
-
 // ------------------------------------------------------------------------------------------
 float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE, bool isSig ){
 
@@ -1396,8 +1279,8 @@ void Generic_Analizer::beginJob() {
 }
 // ------------------------------------------------------------------------------------------
 void Generic_Analizer::endJob() {
-  if(debug){
     outfile->cd();
+    h_EventFlow->Write();
     h_SumEt->Write();
     h_SumEt_cut->Write();
     h_SumEt_15cut->Write();
@@ -1581,7 +1464,6 @@ void Generic_Analizer::endJob() {
     if( WannaFitT0Vtx_ ){
 	Tree_Vtx->Write();
     }
-  }
 }
 // ------------------------------------------------------------------------------------------
 std::vector<DetId> Generic_Analizer::getPFJetRecHitsDR(reco::PFCandidate pfCa, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE, const edm::EventSetup& iSetup)
