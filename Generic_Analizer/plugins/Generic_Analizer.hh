@@ -71,6 +71,14 @@ class Generic_Analizer : public edm::EDAnalyzer {
     FastTool *FTool_;
     const CaloGeometry* geometry_;
     bool  debug;
+    //Selec
+    float MinPt_Gen;
+    float MinPt_GenPu;
+    float MinPt_Reco;
+    float MinPt_RecoPu;
+    float MinDR_asso;
+    float MinDR_pu;
+    //
     float Associated;
     float Associated_EB;
     float Associated_EE;
@@ -87,6 +95,7 @@ class Generic_Analizer : public edm::EDAnalyzer {
     bool Use_R9_;
     bool DoSumEt_;
     bool DoMass_;
+    bool isHgg_;
     string OutName_;
     TFile*outfile;
     TH1F *h_EventFlow;

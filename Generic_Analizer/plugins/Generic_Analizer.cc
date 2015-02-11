@@ -98,7 +98,15 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
   Use_R9_       = iConfig.getUntrackedParameter<bool>("Use_R9");
   DoSumEt_      = iConfig.getUntrackedParameter<bool>("DoSumEt");
   DoMass_       = iConfig.getUntrackedParameter<bool>("DoMass");
+  isHgg_        = iConfig.getUntrackedParameter<bool>("isHgg");
   OutName_      = iConfig.getUntrackedParameter<string>("OutName");
+  //Selection
+  MinPt_Gen     = iConfig.getUntrackedParameter<double>("MinPt_Gen",20);
+  MinPt_GenPu   = iConfig.getUntrackedParameter<double>("MinPt_GenPu",20);
+  MinPt_Reco    = iConfig.getUntrackedParameter<double>("MinPt_Reco",15);
+  MinPt_RecoPu  = iConfig.getUntrackedParameter<double>("MinPt_RecoPu",20);
+  MinDR_asso    = iConfig.getUntrackedParameter<double>("MinDR_asso",0.1);
+  MinDR_pu      = iConfig.getUntrackedParameter<double>("MinDR_pu",0.6);
   debug = false;
 #ifdef DEBUG
   debug = true;
@@ -280,7 +288,7 @@ Generic_Analizer::~Generic_Analizer(){
 void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
   //-------------------------------------------------LOAD Collections--------------------------------------------------------------
-  // Get PFCandidate Collection
+  // PFCandidate
   edm::Handle<reco::PFCandidateCollection> hPFProduct;
   iEvent.getByLabel(fPFCands, hPFProduct);
   const reco::PFCandidateCollection *PFCol = 0;
@@ -300,14 +308,13 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   edm::ESHandle<CaloGeometry> geoHandle;
   iSetup.get<CaloGeometryRecord>().get(geoHandle);
   geometry_ = geoHandle.product();
-  // --- ECAL REC HITS -------------------------------------------------------------------------------------   
-  // ... barrel
+  // RecHit barrel
   edm::Handle<EcalRecHitCollection> recHitsEB;
   iEvent.getByLabel(  edm::InputTag("ecalDetailedTimeRecHit","EcalRecHitsEB"), recHitsEB );
   if ( ! recHitsEB.isValid() ) {
     edm::LogWarning("EBRecoSummary") << "recHitsEB not found"; 
   }
-  // ... endcap
+  // RecHit endcap
   edm::Handle<EcalRecHitCollection> recHitsEE;
   iEvent.getByLabel( edm::InputTag("ecalDetailedTimeRecHit","EcalRecHitsEK"), recHitsEE );
   if ( ! recHitsEE.isValid() ) {
@@ -363,20 +370,21 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   FTool_->Inizialization( SimVtx );
   GlobalPoint Vtx_sim( FTool_->GiveVtxX(), FTool_->GiveVtxY(), FTool_->GiveVtxZ() );
   float T0_Vtx_MC = FTool_->GiveT0();
-  //-------------------------------Let's START-------------------------------------------
+
+  //----------------------------------------Let's START--------------------------------------------------
   h_EventFlow->Fill(0);
   //Good Jets list
   vector<const reco::PFJet*> GoodJetList, BadJetList; GoodJetList.clear(); BadJetList.clear();
   float maxGenJetPt=0., maxGenJetEta=0;
   for (auto& pfGenJet : *GenJets){
     if( pfGenJet.p4().Pt() > maxGenJetPt ) { maxGenJetPt = pfGenJet.p4().Pt(); maxGenJetEta = fabs(pfGenJet.p4().Eta()); }
-    if( pfGenJet.p4().Pt() < 20. ) continue;
+    if( pfGenJet.p4().Pt() < MinPt_Gen ) continue;
     h_EventFlow->Fill(1);
-    float DR_min = 0.2, DR_minH=99.;
+    float DR_min = MinDR_asso, DR_minH=99.;
     GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
     const reco::PFJet* GoodJet = 0;
     for (auto& pfJet : *Jets){
-      if( pfJet.p4().Pt() < 15. ) continue;
+      if( pfJet.p4().Pt() < MinPt_Reco ) continue;
 	GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
 	//if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 )
@@ -396,14 +404,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   h_EtaGenJet->Fill( maxGenJetEta );
   //Bad Jets list
   for (auto& pfJet : *Jets){
-    if( sqrt( pow(pfJet.p4().Px(),2)+pow(pfJet.p4().Py(),2) ) < 25. ) continue;
+    if( sqrt( pow(pfJet.p4().Px(),2)+pow(pfJet.p4().Py(),2) ) < MinPt_RecoPu ) continue;
     GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
     bool isPU = true;
     for (auto& pfGenJet : *GenJets){
-	if( pfGenJet.p4().Pt()<10. ) continue;
+	if( pfGenJet.p4().Pt()<MinPt_GenPu ) continue;
 	GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
-	if( DR<0.6 ){
+	if( DR<MinDR_pu ){
 	  isPU = false;
 	}
     }
@@ -415,10 +423,10 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Plot with good and bad jets
   for(int i=0; i<int(GoodJetList.size()); i++){
-    float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE );
-    h_GoodJet_t->Fill( time-T0_Vtx_MC );
-    if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time-T0_Vtx_MC );
-    if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time-T0_Vtx_MC );
+    float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    h_GoodJet_t->Fill( time );
+    if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time );
+    if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time );
     h_EffEtaTot_jet->Fill( fabs(GoodJetList[i]->p4().eta()) );
     h_EffPtTot_jet->Fill( GoodJetList[i]->pt() );
     if( time>-0.5 && time < 0.5 )  h_EffEta_jet1->Fill( fabs(GoodJetList[i]->p4().eta()) );
@@ -426,28 +434,31 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     if( time>-200 && time < 200. ) h_EffEta_jet3->Fill( fabs(GoodJetList[i]->p4().eta()) );
   }
   for(int i=0; i<int(BadJetList.size()); i++){
-    float time = GetTimeFromJet( BadJetList[i], recHitsEB, recHitsEE );
+    float time = GetTimeFromJet( BadJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_BadJet_t->Fill( time );
     h_NEffEtaTot_jet->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_jet1->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_jet2->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_NEffEta_jet3->Fill( fabs(BadJetList[i]->p4().eta()) );
   }
+
   //Good Photons list
   vector<const reco::Photon*> GoodPhotList, BadPhotList; GoodPhotList.clear(); BadPhotList.clear();
   for (auto& GenPar : *GenPars){
-    if( GenPar.p4().Pt() < 25. ) continue;
+    if( GenPar.p4().Pt() < MinPt_Gen ) continue;
     h_EventFlow->Fill(3);
-    float DR_min = 0.03, DR_minH=99.;
+    float DR_min = MinDR_asso, DR_minH=99.;
     const reco::Photon* GoodPhot = 0;
     GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
     for (auto& photon : *Photons){
+	if( photon.p4().Pt() < MinPt_Reco ) continue;
 	GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
 	float DR = DeltaR( PosPhot, PosGenJet );
-	if( DR<DR_min && GenPar.p4().Pt()/photon.p4().Pt()<1.3 && GenPar.p4().Pt()/photon.p4().Pt()>0.7 ){
+	//if( DR<DR_min && GenPar.p4().Pt()/photon.p4().Pt()<1.3 && GenPar.p4().Pt()/photon.p4().Pt()>0.7 )
+	if( DR<DR_min ){
 	  DR_min = DR;
 	  GoodPhot = &photon;
-	  h_EventFlow->Fill(5);
+	  h_EventFlow->Fill(4);
 	}
 	if( DR<DR_minH ){
 	  DR_minH = DR;
@@ -458,14 +469,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Bad Gamma
   for (auto& photon : *Photons){
-    //Pt Cut
-    if( photon.p4().Pt() < 25. ) continue;
+    if( photon.p4().Pt() < MinPt_RecoPu ) continue;
     GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
     bool isPU = true;
     for (auto& GenPar : *GenPars){
+    if( GenPar.p4().Pt() < MinPt_GenPu ) continue;
 	GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
 	float DR = DeltaR( PosPhot, PosGenJet );
-	if( DR<0.1 ){
+	if( DR<MinDR_pu ){
 	  isPU = false;
 	}
     }
@@ -477,7 +488,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Plots with Good and Bad photons
   for(int i=0; i<int(GoodPhotList.size()); i++){
-    float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE );
+    float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_GoodGamma_t->Fill( time );
     if( fabs(GoodPhotList[i]->p4().eta())<1.47 ) h_GoodGamma_tEB->Fill( time );
     if( fabs(GoodPhotList[i]->p4().eta())>1.50 ) h_GoodGamma_tEE->Fill( time );
@@ -488,37 +499,40 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     if( time>-200 && time < 200. ) h_EffEta_phot3->Fill( fabs(GoodPhotList[i]->p4().eta()) );
   }
   for(int i=0; i<int(BadPhotList.size()); i++){
-    float time = GetTimeFromGamma( BadPhotList[i], recHitsEB, recHitsEE );
+    float time = GetTimeFromGamma( BadPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_BadGamma_t->Fill( time );
     h_NEffEtaTot_phot->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_phot1->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_phot2->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_NEffEta_phot3->Fill( fabs(BadPhotList[i]->p4().eta()) );
   }
-  //MC gammas
+  //Hgg MC Photons
   TLorentzVector Gamma1, Gamma2; Gamma1.SetPtEtaPhiE( -1., -1., -1., -1. ); Gamma2.SetPtEtaPhiE( -1., -1., -1., -1. );
-  bool firstnotfound = true;
-  for (auto& GenPar : *GenPars){
-    if( GenPar.pdgId()==22 && GenPar.mother()->pdgId()==25 && firstnotfound ){
-	Gamma1.SetPtEtaPhiE( GenPar.pt(), GenPar.p4().Eta(), GenPar.p4().Phi(), GenPar.p4().E() );
-	firstnotfound = false;
-	continue;
+  bool MC_pres=false;
+  if( isHgg_ ){
+    bool firstnotfound = true;
+    for (auto& GenPar : *GenPars){
+	if( GenPar.pdgId()==22 && GenPar.mother()->pdgId()==25 && firstnotfound ){
+	  Gamma1.SetPtEtaPhiE( GenPar.pt(), GenPar.p4().Eta(), GenPar.p4().Phi(), GenPar.p4().E() );
+	  firstnotfound = false;
+	  continue;
+	}
+	if( GenPar.pdgId()==22 && GenPar.mother()->pdgId()==25 && GenPar.p4().Eta() != Gamma1.Eta() ){
+	  Gamma2.SetPtEtaPhiE( GenPar.pt(), GenPar.p4().Eta(), GenPar.p4().Phi(), GenPar.p4().E() );
+	}
     }
-    if( GenPar.pdgId()==22 && GenPar.mother()->pdgId()==25 && GenPar.p4().Eta() != Gamma1.Eta() ){
-	Gamma2.SetPtEtaPhiE( GenPar.pt(), GenPar.p4().Eta(), GenPar.p4().Phi(), GenPar.p4().E() );
+    MC_pres = Gamma1.Pt()>15. && Gamma2.Pt()>15. && fabs(Gamma1.Eta())<2.5 && fabs(Gamma2.Eta())<2.5;
+    if( MC_pres ){
+	h_HiggsMass_MC->Fill( (Gamma1+Gamma2).M() );
+	Associated_tot+=2;
+	if( fabs(Gamma1.Eta()) < 1.48) Associated_tot_EB++;
+	if( fabs(Gamma1.Eta()) > 1.48) Associated_tot_EE++;
+	if( fabs(Gamma2.Eta()) < 1.48) Associated_tot_EB++;
+	if( fabs(Gamma2.Eta()) > 1.48) Associated_tot_EE++;
     }
   }
-  bool MC_pres( Gamma1.Pt()>15. && Gamma2.Pt()>15. && fabs(Gamma1.Eta())<2.5 && fabs(Gamma2.Eta())<2.5 );
-  if( MC_pres ){
-    h_HiggsMass_MC->Fill( (Gamma1+Gamma2).M() );
-    Associated_tot+=2;
-    if( fabs(Gamma1.Eta()) < 1.48) Associated_tot_EB++;
-    if( fabs(Gamma1.Eta()) > 1.48) Associated_tot_EE++;
-    if( fabs(Gamma2.Eta()) < 1.48) Associated_tot_EB++;
-    if( fabs(Gamma2.Eta()) > 1.48) Associated_tot_EE++;
-  }
-  if( DoSumEt_ ){
-    //Then Loop on PFCand
+  //SumEt Plot
+  if( DoSumEt_ && isHgg_ ){
     float SumEt_tot=0., SumEt_cutted_tot=0.,SumEt_15cutted_tot=0., SumEt_30cutted_tot=0., SumEt_50cutted_tot=0., SumEt_500cutted_tot=0.;
     float TOT_SumEt_tot=0., TOT_SumEt_cutted_tot=0., TOT_SumEt_15cutted_tot=0., TOT_SumEt_30cutted_tot=0., TOT_SumEt_50cutted_tot=0., TOT_SumEt_500cutted_tot=0.;
     bool blabla=false;
@@ -601,7 +615,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
 	  if( V_cluster[nClu]->energy() > Emin ){
 	    Emin = V_cluster[nClu]->energy();
-	    BestTime = V_seeds[nClu].time(); BestEne = V_seeds[nClu].energy();
+	    BestTime = V_seeds[nClu].time(); BestTime+=T0_Vtx_MC; BestEne = V_seeds[nClu].energy();
 	    ClustTL.SetPtEtaPhiE( V_cluster[nClu]->energy()/cosh(V_cluster[nClu]->eta()) , V_cluster[nClu]->eta(), V_cluster[nClu]->phi(), V_cluster[nClu]->energy() );
 	  }
 	}
@@ -708,7 +722,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	if( fabs(Associated_v2[BestIndex].Eta())<1.48 ) Associated_EB++;
 	if( fabs(Associated_v2[BestIndex].Eta())>1.48 ) Associated_EE++;
     }
-
     //Best Associated Gamma1 No Time 
     bestReso = 99.; BestIndex = -1;
     float DR_max = 0.5;
@@ -793,7 +806,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     h_TOT_SumEt_50cut->Fill(TOT_SumEt_50cutted_tot);
     h_TOT_SumEt_500cut->Fill(TOT_SumEt_500cutted_tot);
   }// if DoSumEt_
-  if( DoMass_ ){
+  // Mass and Energy resolution cleaning
+  if( DoMass_ && isHgg_ ){
     //Hgg Mass----
     // Associate MC gammas with PFCand == gamma
     TLorentzVector gamma_reco1, gamma_reco2; gamma_reco1.SetPtEtaPhiE( -1., -1., -1., -1. ); gamma_reco2.SetPtEtaPhiE( -1., -1., -1., -1. );
@@ -839,26 +853,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	  TLorentzVector Seed1_tl; Seed1_tl.SetPtEtaPhiM( Seed_info1[0], Seed_info1[1], Seed_info1[2], 0. );
 	  TLorentzVector Seed2_tl; Seed2_tl.SetPtEtaPhiM( Seed_info2[0], Seed_info2[1], Seed_info2[2], 0. );
 	  if( Seed_info1[3]!=-999 && Seed_info2[3]!=-999 ){
-	    //Add vertex 1
-	    //float thistimeG1 = Seed_info1[3];
-	    //GlobalPoint PosTot(  Seed1_tl.X()-Vtx_sim.x(),  Seed1_tl.Y()-Vtx_sim.y() ,  Seed1_tl.Z()-Vtx_sim.z() );
-	    //float TimeOfFlight = sqrt( pow(PosTot.x(),2) + pow(PosTot.y(),2) + pow(PosTot.z(),2) )/(LIGHT_SPEED); //Time c[cm/ns]
-	    //thistimeG1 += TimeOfFlight;
-	    //thistimeG1 += T0_Vtx_MC;
-	    //GlobalPoint PosTotb( Seed1_tl.X(), Seed1_tl.Y() , Seed1_tl.Z() );
-	    //TimeOfFlight = sqrt( pow(PosTotb.x(),2) + pow(PosTotb.y(),2) + pow(PosTotb.z(),2) )/(LIGHT_SPEED); //Time c[cm/ns]
-	    //thistimeG1 -= TimeOfFlight;
-	    //Add vertex 2
-	    //float thistimeG2 = Seed_info2[3];
-	    //GlobalPoint PosTot2(  Seed2_tl.X()-Vtx_sim.x(),  Seed2_tl.Y()-Vtx_sim.y() , Seed2_tl.Z()-Vtx_sim.z() );
-	    //float TimeOfFlight2 = sqrt( pow(PosTot2.x(),2) + pow(PosTot2.y(),2) + pow(PosTot2.z(),2) )/(LIGHT_SPEED); //Time c[cm/ns]
-	    //thistimeG2 += TimeOfFlight2;
-	    //thistimeG2 += T0_Vtx_MC;
-	    //GlobalPoint PosTot2b( Seed2_tl.X(), Seed2_tl.Y(), Seed2_tl.Z() );
-	    //TimeOfFlight2 = sqrt( pow(PosTot2b.x(),2) + pow(PosTot2b.y(),2) + pow(PosTot2b.z(),2) )/(LIGHT_SPEED); //Time c[cm/ns]
-	    //thistimeG2 -= TimeOfFlight2;
-	    //
-	    //other try
 	    GlobalPoint PosTot(  Seed1_tl.X()-Vtx_sim.x(),  Seed1_tl.Y()-Vtx_sim.y() ,  Seed1_tl.Z()-Vtx_sim.z() );
 	    float tof1 = T0_Vtx_MC +  sqrt( pow(PosTot.x(),2) + pow(PosTot.y(),2) + pow(PosTot.z(),2) )/(LIGHT_SPEED);
 	    GlobalPoint PosTot2(  Seed2_tl.X()-Vtx_sim.x(),  Seed2_tl.Y()-Vtx_sim.y() ,  Seed2_tl.Z()-Vtx_sim.z() );
@@ -892,7 +886,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	    vxRECO             = Vtx_reco.x();
 	    Tree_Vtx->Fill();
 	  }
-	}//WannaFitT0
+	}//WannaFitT0Vtx
 	//Correction for right vertex and PFMAss
 	TVector3 gamma_reco1_poscorr; gamma_reco1_poscorr.SetXYZ( gamma_reco1.X() + Vtx_reco.x(), gamma_reco1.Y() + Vtx_reco.y(), gamma_reco1.Z() + Vtx_reco.z() );
 	TVector3 gamma_reco2_poscorr; gamma_reco2_poscorr.SetXYZ( gamma_reco2.X() + Vtx_reco.x(), gamma_reco2.Y() + Vtx_reco.y(), gamma_reco2.Z() + Vtx_reco.z() );
@@ -1279,191 +1273,191 @@ void Generic_Analizer::beginJob() {
 }
 // ------------------------------------------------------------------------------------------
 void Generic_Analizer::endJob() {
-    outfile->cd();
-    h_EventFlow->Write();
-    h_SumEt->Write();
-    h_SumEt_cut->Write();
-    h_SumEt_15cut->Write();
-    h_SumEt_30cut->Write();
-    h_SumEt_50cut->Write();
-    h_SumEt_500cut->Write();
-    h_TOT_SumEt->Write();
-    h_TOT_SumEt_cut->Write();
-    h_TOT_SumEt_15cut->Write();
-    h_TOT_SumEt_30cut->Write();
-    h_TOT_SumEt_50cut->Write();
-    h_TOT_SumEt_500cut->Write();
-    h_Time->Write();
-    h_Time_we->Write();
-    h_TimeSmeared->Write();
-    h_TimeSmeared_we->Write();
-    h_GoodJet_t->Write();
-    h_GoodJet_tEB->Write();
-    h_GoodJet_tEE->Write();
-    h_BadJet_t->Write();
-    h_GoodGamma_t->Write();
-    h_GoodGamma_tEB->Write();
-    h_GoodGamma_tEE->Write();
-    h_GoodGamma_t2->Write();
-    h_Phot_DR->Write();
-    h_Jet_DR->Write();
-    h_PtGenJet->Write();
-    h_EtaGenJet->Write();
-    h_EffEta_phot1->Write();
-    h_EffEta_phot2->Write();
-    h_EffEta_phot3->Write();
-    h_NEffEta_phot1->Write();
-    h_NEffEta_phot2->Write();
-    h_NEffEta_phot3->Write();
-    h_EffEta_jet1->Write();
-    h_EffEta_jet2->Write();
-    h_EffEta_jet3->Write();
-    h_NEffEta_jet1->Write();
-    h_NEffEta_jet2->Write();
-    h_NEffEta_jet3->Write();
-    h_EffEtaTot_phot->Write();
-    h_NEffEtaTot_phot->Write();
-    h_EffEtaTot_jet->Write();
-    h_EffPtTot_jet->Write();
-    h_NEffEtaTot_jet->Write();
-    h_BadGamma_t->Write();
-    h_Rh0->Write();
-    h_NVtx->Write();
-    h_HiggsMass->Write();
-    h_HiggsPFMass->Write();
-    Ereso1->Write();
-    Ereso2->Write();
-    Ereso1_Mit->Write();
-    Ereso2_Mit->Write();
-    h_HiggsPFMass_Mit->Write();
-    h_PU_frac_1->Write();
-    h_PU_frac_2->Write();
-    h_HiggsPFMass_Vtx->Write();
-    h_HiggsMass_MC->Write();
-    h_Association->SetBinContent( 1, Associated_tot);
-    h_Association->SetBinContent( 2, Associated);
-    h_Association->SetBinContent( 3, Associated_time);
-    h_Association->Write();
-    h_Association_EB->SetBinContent( 1, Associated_tot_EB);
-    h_Association_EB->SetBinContent( 2, Associated_EB);
-    h_Association_EB->SetBinContent( 3, Associated_time_EB);
-    h_Association_EB->Write();
-    h_Association_EE->SetBinContent( 1, Associated_tot_EE);
-    h_Association_EE->SetBinContent( 2, Associated_EE);
-    h_Association_EE->SetBinContent( 3, Associated_time_EE);
-    h_Association_EE->Write();
-    h_PtGammaAssoEB->Write();
-    h_EGammaAssoEB->Write();
-    h_DRAsso->Write();
-    h_TimeGammaNOTAsso->Write();
-    h_TimeGammaNOTAssoW->Write();
-    h_TimeGammaAssoEB_sme15->Write();
-    h_TimeGammaAssoEE_sme15->Write();
-    h_TimeGammaAssoEB_sme30->Write();
-    h_TimeGammaAssoEE_sme30->Write();
-    h_TimeGammaAssoEB_sme50->Write();
-    h_TimeGammaAssoEE_sme50->Write();
-    h_TimeGammaAssoEB_sme500->Write();
-    h_TimeGammaAssoEE_sme500->Write();
-    h_TimeGammaAssoEB->Write();
-    h_TimeGammaAssoEB_L->Write();
-    h_TimeGammaAssoEB_L2->Write();
-    h_PtGammaAssoEE->Write();
-    h_EGammaAssoEE->Write();
-    h_TimeGammaAssoEE->Write();
-    h_TimeGammaAssoEE_L->Write();
-    h_TimeGammaAssoEE_L2->Write();
-    h_NclustAsso_EB1->Write();
-    h_NclustAsso_EB2->Write();
-    h_NclustAsso_EE1->Write();
-    h_NclustAsso_EE2->Write();
-    //
-    h_DR_vs_Time_EB->Write();
-    h_DR_vs_Time_EB2->Write();
-    h_DR_vs_Time_EB_reb->Write();
-    h_DR_vs_Time_EB_reb2->Write();
-    h_DR_vs_Time_EB_b->Write();
-    h_DR_vs_Time_EB_reb_b->Write();
-    h_DR_vs_Time_EB_reb2_b->Write();
-    h_DR_vs_Time_L_EB->Write();
-    h_DR_vs_Time_L_EB_b->Write();
-    h_energyForDR_EB->Write();
-    h_timeForDR_EB->Write();
-    h_timevsEne_EB->Write();
-    h_timevsEne_EB2->Write();
-    h_energyForDR_EB_b->Write();
-    h_timeForDR_EB_b->Write();
-    h_timevsEne_EB_b->Write();
-    h_timevsEne_EB2_b->Write();
-    for(int i=0; i<h_DR_vs_Time_EB->GetNbinsX(); i++){ //_reb
-	TH1D *h_Time_vs_DR_RMS = h_DR_vs_Time_EB->ProjectionY( "_py", i+1, i+1 );
-	ostringstream Bin; Bin << i;
-	TString Name = "Time_dr_EB_" + Bin.str();
-	h_Time_vs_DR_RMS->SetName( Name.Data() ); h_Time_vs_DR_RMS->SetNameTitle( Name.Data(),  Name.Data() );
-	if( h_Time_vs_DR_RMS->Integral(1,h_Time_vs_DR_RMS->GetNbinsX())>200 ){
-	  double quant[2], value[2];
-	  value[0]=(h_Time_vs_DR_RMS->Integral()*99./100)/h_Time_vs_DR_RMS->Integral();
-	  value[1]=(h_Time_vs_DR_RMS->Integral()*0.5/100)/h_Time_vs_DR_RMS->Integral();
-	  h_Time_vs_DR_RMS->GetQuantiles(2, quant, value);
-	  float Max = quant[0]; float Min = quant[1];
-	  h_Time_vs_DR_RMS->GetXaxis()->SetRangeUser(Min, Max);
-	  h_MEANRMS_vs_DR_EB->SetBinContent( i+1, h_Time_vs_DR_RMS->GetMean() );
-	  h_MEANRMS_vs_DR_EB->SetBinError( i+1, h_Time_vs_DR_RMS->GetRMS() );
-	  h_MEANRMS_vs_DR_EB_c->SetBinContent( i+1, Min+(Max-Min)/2. );
-	  h_MEANRMS_vs_DR_EB_c->SetBinError( i+1, (Max-Min)/2. );
-	  h_Time_vs_DR_RMS->Write();
-	}
+  outfile->cd();
+  h_EventFlow->Write();
+  h_SumEt->Write();
+  h_SumEt_cut->Write();
+  h_SumEt_15cut->Write();
+  h_SumEt_30cut->Write();
+  h_SumEt_50cut->Write();
+  h_SumEt_500cut->Write();
+  h_TOT_SumEt->Write();
+  h_TOT_SumEt_cut->Write();
+  h_TOT_SumEt_15cut->Write();
+  h_TOT_SumEt_30cut->Write();
+  h_TOT_SumEt_50cut->Write();
+  h_TOT_SumEt_500cut->Write();
+  h_Time->Write();
+  h_Time_we->Write();
+  h_TimeSmeared->Write();
+  h_TimeSmeared_we->Write();
+  h_GoodJet_t->Write();
+  h_GoodJet_tEB->Write();
+  h_GoodJet_tEE->Write();
+  h_BadJet_t->Write();
+  h_GoodGamma_t->Write();
+  h_GoodGamma_tEB->Write();
+  h_GoodGamma_tEE->Write();
+  h_GoodGamma_t2->Write();
+  h_Phot_DR->Write();
+  h_Jet_DR->Write();
+  h_PtGenJet->Write();
+  h_EtaGenJet->Write();
+  h_EffEta_phot1->Write();
+  h_EffEta_phot2->Write();
+  h_EffEta_phot3->Write();
+  h_NEffEta_phot1->Write();
+  h_NEffEta_phot2->Write();
+  h_NEffEta_phot3->Write();
+  h_EffEta_jet1->Write();
+  h_EffEta_jet2->Write();
+  h_EffEta_jet3->Write();
+  h_NEffEta_jet1->Write();
+  h_NEffEta_jet2->Write();
+  h_NEffEta_jet3->Write();
+  h_EffEtaTot_phot->Write();
+  h_NEffEtaTot_phot->Write();
+  h_EffEtaTot_jet->Write();
+  h_EffPtTot_jet->Write();
+  h_NEffEtaTot_jet->Write();
+  h_BadGamma_t->Write();
+  h_Rh0->Write();
+  h_NVtx->Write();
+  h_HiggsMass->Write();
+  h_HiggsPFMass->Write();
+  Ereso1->Write();
+  Ereso2->Write();
+  Ereso1_Mit->Write();
+  Ereso2_Mit->Write();
+  h_HiggsPFMass_Mit->Write();
+  h_PU_frac_1->Write();
+  h_PU_frac_2->Write();
+  h_HiggsPFMass_Vtx->Write();
+  h_HiggsMass_MC->Write();
+  h_Association->SetBinContent( 1, Associated_tot);
+  h_Association->SetBinContent( 2, Associated);
+  h_Association->SetBinContent( 3, Associated_time);
+  h_Association->Write();
+  h_Association_EB->SetBinContent( 1, Associated_tot_EB);
+  h_Association_EB->SetBinContent( 2, Associated_EB);
+  h_Association_EB->SetBinContent( 3, Associated_time_EB);
+  h_Association_EB->Write();
+  h_Association_EE->SetBinContent( 1, Associated_tot_EE);
+  h_Association_EE->SetBinContent( 2, Associated_EE);
+  h_Association_EE->SetBinContent( 3, Associated_time_EE);
+  h_Association_EE->Write();
+  h_PtGammaAssoEB->Write();
+  h_EGammaAssoEB->Write();
+  h_DRAsso->Write();
+  h_TimeGammaNOTAsso->Write();
+  h_TimeGammaNOTAssoW->Write();
+  h_TimeGammaAssoEB_sme15->Write();
+  h_TimeGammaAssoEE_sme15->Write();
+  h_TimeGammaAssoEB_sme30->Write();
+  h_TimeGammaAssoEE_sme30->Write();
+  h_TimeGammaAssoEB_sme50->Write();
+  h_TimeGammaAssoEE_sme50->Write();
+  h_TimeGammaAssoEB_sme500->Write();
+  h_TimeGammaAssoEE_sme500->Write();
+  h_TimeGammaAssoEB->Write();
+  h_TimeGammaAssoEB_L->Write();
+  h_TimeGammaAssoEB_L2->Write();
+  h_PtGammaAssoEE->Write();
+  h_EGammaAssoEE->Write();
+  h_TimeGammaAssoEE->Write();
+  h_TimeGammaAssoEE_L->Write();
+  h_TimeGammaAssoEE_L2->Write();
+  h_NclustAsso_EB1->Write();
+  h_NclustAsso_EB2->Write();
+  h_NclustAsso_EE1->Write();
+  h_NclustAsso_EE2->Write();
+  //
+  h_DR_vs_Time_EB->Write();
+  h_DR_vs_Time_EB2->Write();
+  h_DR_vs_Time_EB_reb->Write();
+  h_DR_vs_Time_EB_reb2->Write();
+  h_DR_vs_Time_EB_b->Write();
+  h_DR_vs_Time_EB_reb_b->Write();
+  h_DR_vs_Time_EB_reb2_b->Write();
+  h_DR_vs_Time_L_EB->Write();
+  h_DR_vs_Time_L_EB_b->Write();
+  h_energyForDR_EB->Write();
+  h_timeForDR_EB->Write();
+  h_timevsEne_EB->Write();
+  h_timevsEne_EB2->Write();
+  h_energyForDR_EB_b->Write();
+  h_timeForDR_EB_b->Write();
+  h_timevsEne_EB_b->Write();
+  h_timevsEne_EB2_b->Write();
+  for(int i=0; i<h_DR_vs_Time_EB->GetNbinsX(); i++){ //_reb
+    TH1D *h_Time_vs_DR_RMS = h_DR_vs_Time_EB->ProjectionY( "_py", i+1, i+1 );
+    ostringstream Bin; Bin << i;
+    TString Name = "Time_dr_EB_" + Bin.str();
+    h_Time_vs_DR_RMS->SetName( Name.Data() ); h_Time_vs_DR_RMS->SetNameTitle( Name.Data(),  Name.Data() );
+    if( h_Time_vs_DR_RMS->Integral(1,h_Time_vs_DR_RMS->GetNbinsX())>200 ){
+	double quant[2], value[2];
+	value[0]=(h_Time_vs_DR_RMS->Integral()*99./100)/h_Time_vs_DR_RMS->Integral();
+	value[1]=(h_Time_vs_DR_RMS->Integral()*0.5/100)/h_Time_vs_DR_RMS->Integral();
+	h_Time_vs_DR_RMS->GetQuantiles(2, quant, value);
+	float Max = quant[0]; float Min = quant[1];
+	h_Time_vs_DR_RMS->GetXaxis()->SetRangeUser(Min, Max);
+	h_MEANRMS_vs_DR_EB->SetBinContent( i+1, h_Time_vs_DR_RMS->GetMean() );
+	h_MEANRMS_vs_DR_EB->SetBinError( i+1, h_Time_vs_DR_RMS->GetRMS() );
+	h_MEANRMS_vs_DR_EB_c->SetBinContent( i+1, Min+(Max-Min)/2. );
+	h_MEANRMS_vs_DR_EB_c->SetBinError( i+1, (Max-Min)/2. );
+	h_Time_vs_DR_RMS->Write();
     }
-    h_MEANRMS_vs_DR_EB->SetMarkerColor(1); h_MEANRMS_vs_DR_EB->SetMarkerStyle(20); h_MEANRMS_vs_DR_EB->SetMarkerSize(1);
-    h_MEANRMS_vs_DR_EB->Write();
-    h_MEANRMS_vs_DR_EB_c->SetMarkerColor(1); h_MEANRMS_vs_DR_EB_c->SetMarkerStyle(20); h_MEANRMS_vs_DR_EB_c->SetMarkerSize(1);
-    h_MEANRMS_vs_DR_EB_c->Write();
-    //EE
-    h_DR_vs_Time_EE->Write();
-    h_DR_vs_Time_EE2->Write();
-    h_DR_vs_Time_EE_reb->Write();
-    h_DR_vs_Time_EE_reb2->Write();
-    h_DR_vs_Time_EE_b->Write();
-    h_DR_vs_Time_EE_reb_b->Write();
-    h_DR_vs_Time_EE_reb2_b->Write();
-    h_DR_vs_Time_L_EE->Write();
-    h_DR_vs_Time_L_EE_b->Write();
-    h_energyForDR_EE->Write();
-    h_timeForDR_EE->Write();
-    h_timevsEne_EE->Write();
-    h_timevsEne_EE2->Write();
-    h_energyForDR_EE_b->Write();
-    h_timeForDR_EE_b->Write();
-    h_timevsEne_EE_b->Write();
-    h_timevsEne_EE2_b->Write();
-    for(int i=0; i<h_DR_vs_Time_EE->GetNbinsX(); i++){//No _reb
-	TH1D *h_Time_vs_DR_RMS = h_DR_vs_Time_EE->ProjectionY( "_py", i+1, i+1 );
-	ostringstream Bin; Bin << i;
-	TString Name = "Time_dr_EE_" + Bin.str();
-	h_Time_vs_DR_RMS->SetName( Name.Data() ); h_Time_vs_DR_RMS->SetNameTitle( Name.Data(),  Name.Data() );
-	if( h_Time_vs_DR_RMS->Integral(1,h_Time_vs_DR_RMS->GetNbinsX())>200 ){
-	  double quant[2], value[2];
-	  value[0]=(h_Time_vs_DR_RMS->Integral()*99./100)/h_Time_vs_DR_RMS->Integral();
-	  value[1]=(h_Time_vs_DR_RMS->Integral()*0.5/100)/h_Time_vs_DR_RMS->Integral();
-	  h_Time_vs_DR_RMS->GetQuantiles(2, quant, value);
-	  float Max = quant[0]; float Min = quant[1];
-	  h_Time_vs_DR_RMS->GetXaxis()->SetRangeUser(Min, Max);
-	  h_MEANRMS_vs_DR_EE->SetBinContent( i+1, h_Time_vs_DR_RMS->GetMean() );
-	  h_MEANRMS_vs_DR_EE->SetBinError( i+1, h_Time_vs_DR_RMS->GetRMS() );
-	  h_MEANRMS_vs_DR_EE_c->SetBinContent( i+1, Min+(Max-Min)/2. );
-	  h_MEANRMS_vs_DR_EE_c->SetBinError( i+1, (Max-Min)/2. );
-	  h_Time_vs_DR_RMS->Write();
-	}
+  }
+  h_MEANRMS_vs_DR_EB->SetMarkerColor(1); h_MEANRMS_vs_DR_EB->SetMarkerStyle(20); h_MEANRMS_vs_DR_EB->SetMarkerSize(1);
+  h_MEANRMS_vs_DR_EB->Write();
+  h_MEANRMS_vs_DR_EB_c->SetMarkerColor(1); h_MEANRMS_vs_DR_EB_c->SetMarkerStyle(20); h_MEANRMS_vs_DR_EB_c->SetMarkerSize(1);
+  h_MEANRMS_vs_DR_EB_c->Write();
+  //EE
+  h_DR_vs_Time_EE->Write();
+  h_DR_vs_Time_EE2->Write();
+  h_DR_vs_Time_EE_reb->Write();
+  h_DR_vs_Time_EE_reb2->Write();
+  h_DR_vs_Time_EE_b->Write();
+  h_DR_vs_Time_EE_reb_b->Write();
+  h_DR_vs_Time_EE_reb2_b->Write();
+  h_DR_vs_Time_L_EE->Write();
+  h_DR_vs_Time_L_EE_b->Write();
+  h_energyForDR_EE->Write();
+  h_timeForDR_EE->Write();
+  h_timevsEne_EE->Write();
+  h_timevsEne_EE2->Write();
+  h_energyForDR_EE_b->Write();
+  h_timeForDR_EE_b->Write();
+  h_timevsEne_EE_b->Write();
+  h_timevsEne_EE2_b->Write();
+  for(int i=0; i<h_DR_vs_Time_EE->GetNbinsX(); i++){//No _reb
+    TH1D *h_Time_vs_DR_RMS = h_DR_vs_Time_EE->ProjectionY( "_py", i+1, i+1 );
+    ostringstream Bin; Bin << i;
+    TString Name = "Time_dr_EE_" + Bin.str();
+    h_Time_vs_DR_RMS->SetName( Name.Data() ); h_Time_vs_DR_RMS->SetNameTitle( Name.Data(),  Name.Data() );
+    if( h_Time_vs_DR_RMS->Integral(1,h_Time_vs_DR_RMS->GetNbinsX())>200 ){
+	double quant[2], value[2];
+	value[0]=(h_Time_vs_DR_RMS->Integral()*99./100)/h_Time_vs_DR_RMS->Integral();
+	value[1]=(h_Time_vs_DR_RMS->Integral()*0.5/100)/h_Time_vs_DR_RMS->Integral();
+	h_Time_vs_DR_RMS->GetQuantiles(2, quant, value);
+	float Max = quant[0]; float Min = quant[1];
+	h_Time_vs_DR_RMS->GetXaxis()->SetRangeUser(Min, Max);
+	h_MEANRMS_vs_DR_EE->SetBinContent( i+1, h_Time_vs_DR_RMS->GetMean() );
+	h_MEANRMS_vs_DR_EE->SetBinError( i+1, h_Time_vs_DR_RMS->GetRMS() );
+	h_MEANRMS_vs_DR_EE_c->SetBinContent( i+1, Min+(Max-Min)/2. );
+	h_MEANRMS_vs_DR_EE_c->SetBinError( i+1, (Max-Min)/2. );
+	h_Time_vs_DR_RMS->Write();
     }
-    h_MEANRMS_vs_DR_EE->SetMarkerColor(1); h_MEANRMS_vs_DR_EE->SetMarkerStyle(20); h_MEANRMS_vs_DR_EE->SetMarkerSize(1);
-    h_MEANRMS_vs_DR_EE->Write();
-    h_MEANRMS_vs_DR_EE_c->SetMarkerColor(1); h_MEANRMS_vs_DR_EE_c->SetMarkerStyle(20); h_MEANRMS_vs_DR_EE_c->SetMarkerSize(1);
-    h_MEANRMS_vs_DR_EE_c->Write();
-    h_R91->Write();
-    h_R92->Write();
-    if( WannaFitT0Vtx_ ){
-	Tree_Vtx->Write();
-    }
+  }
+  h_MEANRMS_vs_DR_EE->SetMarkerColor(1); h_MEANRMS_vs_DR_EE->SetMarkerStyle(20); h_MEANRMS_vs_DR_EE->SetMarkerSize(1);
+  h_MEANRMS_vs_DR_EE->Write();
+  h_MEANRMS_vs_DR_EE_c->SetMarkerColor(1); h_MEANRMS_vs_DR_EE_c->SetMarkerStyle(20); h_MEANRMS_vs_DR_EE_c->SetMarkerSize(1);
+  h_MEANRMS_vs_DR_EE_c->Write();
+  h_R91->Write();
+  h_R92->Write();
+  if( WannaFitT0Vtx_ ){
+    Tree_Vtx->Write();
+  }
 }
 // ------------------------------------------------------------------------------------------
 std::vector<DetId> Generic_Analizer::getPFJetRecHitsDR(reco::PFCandidate pfCa, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE, const edm::EventSetup& iSetup)
