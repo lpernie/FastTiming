@@ -73,7 +73,6 @@ class Generic_Analizer : public edm::EDAnalyzer {
     bool  debug;
     //Selec
     float MinPt_Gen;
-    float MinPt_GenPu;
     float MinPt_Reco;
     float MinPt_RecoPu;
     float MinDR_asso;
@@ -153,11 +152,14 @@ class Generic_Analizer : public edm::EDAnalyzer {
     TH1F *h_GoodJet_t;
     TH1F *h_GoodJet_tEB;
     TH1F *h_GoodJet_tEE;
+    TH1F *h_GoodJet_tEB2;
+    TH1F *h_GoodJet_tEE2;
     TH1F *h_BadJet_t;
     TH1F *h_GoodGamma_t;
     TH1F *h_GoodGamma_tEB;
     TH1F *h_GoodGamma_tEE;
-    TH1F *h_GoodGamma_t2;
+    TH1F *h_GoodGamma_tEB2;
+    TH1F *h_GoodGamma_tEE2;
     TH1F *h_Phot_DR;
     TH1F *h_Jet_DR;
     TH1F *h_PtGenJet;
@@ -174,11 +176,12 @@ class Generic_Analizer : public edm::EDAnalyzer {
     TH1F *h_NEffEta_jet1;
     TH1F *h_NEffEta_jet2;
     TH1F *h_NEffEta_jet3;
+    TH1F *h_EffEta_phot;
     TH1F *h_EffEtaTot_phot;
-    TH1F *h_NEffEtaTot_phot;
     TH1F *h_EffEtaTot_jet;
     TH1F *h_EffPtTot_jet;
-    TH1F *h_NEffEtaTot_jet;
+    TH1F *h_EffEta_jet;
+    TH1F *h_EffPt_jet;
     TH1F *h_BadGamma_t;
     TH1F *h_Rh0;
     TH1F *h_NVtx;

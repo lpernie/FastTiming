@@ -101,10 +101,9 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
   isHgg_        = iConfig.getUntrackedParameter<bool>("isHgg");
   OutName_      = iConfig.getUntrackedParameter<string>("OutName");
   //Selection
-  MinPt_Gen     = iConfig.getUntrackedParameter<double>("MinPt_Gen",20);
-  MinPt_GenPu   = iConfig.getUntrackedParameter<double>("MinPt_GenPu",20);
-  MinPt_Reco    = iConfig.getUntrackedParameter<double>("MinPt_Reco",15);
-  MinPt_RecoPu  = iConfig.getUntrackedParameter<double>("MinPt_RecoPu",20);
+  MinPt_Gen     = iConfig.getUntrackedParameter<double>("MinPt_Gen",30);
+  MinPt_Reco    = iConfig.getUntrackedParameter<double>("MinPt_Reco",20);
+  MinPt_RecoPu  = iConfig.getUntrackedParameter<double>("MinPt_RecoPu",25);
   MinDR_asso    = iConfig.getUntrackedParameter<double>("MinDR_asso",0.1);
   MinDR_pu      = iConfig.getUntrackedParameter<double>("MinDR_pu",0.6);
   debug = false;
@@ -135,11 +134,14 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
     h_GoodJet_t          = new TH1F("h_GoodJet_t", "", 100, -0.5, 0.5);
     h_GoodJet_tEB        = new TH1F("h_GoodJet_tEB", "", 100, -0.5, 0.5);
     h_GoodJet_tEE        = new TH1F("h_GoodJet_tEE", "", 100, -0.5, 0.5);
+    h_GoodJet_tEB2       = new TH1F("h_GoodJet_tEB2", "", 100, -0.01, 0.03);
+    h_GoodJet_tEE2       = new TH1F("h_GoodJet_tEE2", "", 100, -0.01, 0.03);
     h_BadJet_t           = new TH1F("h_BadJet_t", "", 100, -0.5, 0.5);
     h_GoodGamma_t        = new TH1F("h_GoodGamma_t", "", 100, -0.5, 0.5);
     h_GoodGamma_tEB      = new TH1F("h_GoodGamma_tEB", "", 100, -0.5, 0.5);
-    h_GoodGamma_tEE       = new TH1F("h_GoodGamma_tEE", "", 100, -0.5, 0.5);
-    h_GoodGamma_t2       = new TH1F("h_GoodGamma_t2", "", 100, -0.01, 0.05);
+    h_GoodGamma_tEE      = new TH1F("h_GoodGamma_tEE", "", 100, -0.5, 0.5);
+    h_GoodGamma_tEB2     = new TH1F("h_GoodGamma_tEB2", "", 100, -0.01, 0.03);
+    h_GoodGamma_tEE2     = new TH1F("h_GoodGamma_tEE2", "", 100, -0.01, 0.03);
     h_Jet_DR             = new TH1F("h_Jet_DR", "", 100, 0., 2.);
     h_Phot_DR            = new TH1F("h_Phot_DR", "", 100, 0., 1.);
     h_PtGenJet           = new TH1F("h_PtGenJet", "", 50, 0., 500.);
@@ -156,11 +158,12 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
     h_NEffEta_jet1       = new TH1F("h_NEffEta_jet1", "", 10, 0., 3.);
     h_NEffEta_jet2       = new TH1F("h_NEffEta_jet2", "", 10, 0., 3.);
     h_NEffEta_jet3       = new TH1F("h_NEffEta_jet3", "", 10, 0., 3.);
+    h_EffEta_phot        = new TH1F("h_EffEta_phot", "", 10, 0., 3.);
     h_EffEtaTot_phot     = new TH1F("h_EffEtaTot_phot", "", 10, 0., 3.);
-    h_NEffEtaTot_phot    = new TH1F("h_NEffEtaTot_phot", "", 10, 0., 3.);
+    h_EffEta_jet         = new TH1F("h_EffEta_jet", "", 10, 0., 3.);
+    h_EffPt_jet          = new TH1F("h_EffPt_jet", "", 100, 0., 500.);
     h_EffEtaTot_jet      = new TH1F("h_EffEtaTot_jet", "", 10, 0., 3.);
     h_EffPtTot_jet       = new TH1F("h_EffPtTot_jet", "", 100, 0., 500.);
-    h_NEffEtaTot_jet     = new TH1F("h_NEffEtaTot_jet", "", 10, 0., 3.);
     h_BadGamma_t         = new TH1F("h_BadGamma_t", "", 100, -0.5, 0.5);
     h_Rh0                = new TH1F("h_Rh0", "", 100, 0., 100.);
     h_NVtx               = new TH1F("h_NVtx", "", 70, 0., 140.);
@@ -382,6 +385,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     h_EventFlow->Fill(1);
     float DR_min = MinDR_asso, DR_minH=99.;
     GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
+    h_EffEtaTot_jet->Fill( fabs(PosGenJet.eta()) );
+    h_EffPtTot_jet->Fill( pfGenJet.p4().Pt() );
     const reco::PFJet* GoodJet = 0;
     for (auto& pfJet : *Jets){
       if( pfJet.p4().Pt() < MinPt_Reco ) continue;
@@ -408,11 +413,19 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     GlobalPoint PosJet( pfJet.p4().X(),  pfJet.p4().Y(), pfJet.p4().Z() );
     bool isPU = true;
     for (auto& pfGenJet : *GenJets){
-	if( pfGenJet.p4().Pt()<MinPt_GenPu ) continue;
 	GlobalPoint PosGenJet( pfGenJet.p4().X(), pfGenJet.p4().Y(), pfGenJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
 	if( DR<MinDR_pu ){
 	  isPU = false;
+	}
+    }
+    if( isPU ){
+	for (auto& GenPar : *GenPars){
+	  GlobalPoint PosGenP( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
+	  float DR = DeltaR( PosJet, PosGenP );
+	  if( DR<MinDR_pu ){
+	    isPU = false;
+	  }
 	}
     }
     if( isPU ){
@@ -425,10 +438,10 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   for(int i=0; i<int(GoodJetList.size()); i++){
     float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_GoodJet_t->Fill( time );
-    if( fabs(GoodJetList[i]->p4().eta())<1.47 ) h_GoodJet_tEB->Fill( time );
-    if( fabs(GoodJetList[i]->p4().eta())>1.50 ) h_GoodJet_tEE->Fill( time );
-    h_EffEtaTot_jet->Fill( fabs(GoodJetList[i]->p4().eta()) );
-    h_EffPtTot_jet->Fill( GoodJetList[i]->pt() );
+    if( fabs(GoodJetList[i]->p4().eta())<1.47 ){ h_GoodJet_tEB->Fill( time ); h_GoodJet_tEB2->Fill( time );}
+    if( fabs(GoodJetList[i]->p4().eta())>1.50 ){ h_GoodJet_tEE->Fill( time ); h_GoodJet_tEE2->Fill( time );}
+    h_EffEta_jet->Fill( fabs(GoodJetList[i]->p4().eta()) );
+    h_EffPt_jet->Fill( GoodJetList[i]->pt() );
     if( time>-0.5 && time < 0.5 )  h_EffEta_jet1->Fill( fabs(GoodJetList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_EffEta_jet2->Fill( fabs(GoodJetList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_EffEta_jet3->Fill( fabs(GoodJetList[i]->p4().eta()) );
@@ -436,7 +449,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   for(int i=0; i<int(BadJetList.size()); i++){
     float time = GetTimeFromJet( BadJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_BadJet_t->Fill( time );
-    h_NEffEtaTot_jet->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_jet1->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_jet2->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_NEffEta_jet3->Fill( fabs(BadJetList[i]->p4().eta()) );
@@ -445,11 +457,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //Good Photons list
   vector<const reco::Photon*> GoodPhotList, BadPhotList; GoodPhotList.clear(); BadPhotList.clear();
   for (auto& GenPar : *GenPars){
-    if( GenPar.p4().Pt() < MinPt_Gen ) continue;
+    if( GenPar.p4().Pt() < MinPt_Gen || GenPar.pdgId()!=22 || GenPar.status()!=1 ) continue;
     h_EventFlow->Fill(3);
     float DR_min = MinDR_asso, DR_minH=99.;
     const reco::Photon* GoodPhot = 0;
     GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
+    h_EffEtaTot_phot->Fill( fabs(GenPar.eta()) );
     for (auto& photon : *Photons){
 	if( photon.p4().Pt() < MinPt_Reco ) continue;
 	GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
@@ -473,7 +486,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
     bool isPU = true;
     for (auto& GenPar : *GenPars){
-    if( GenPar.p4().Pt() < MinPt_GenPu ) continue;
 	GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
 	float DR = DeltaR( PosPhot, PosGenJet );
 	if( DR<MinDR_pu ){
@@ -490,10 +502,9 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   for(int i=0; i<int(GoodPhotList.size()); i++){
     float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_GoodGamma_t->Fill( time );
-    if( fabs(GoodPhotList[i]->p4().eta())<1.47 ) h_GoodGamma_tEB->Fill( time );
-    if( fabs(GoodPhotList[i]->p4().eta())>1.50 ) h_GoodGamma_tEE->Fill( time );
-    h_GoodGamma_t2->Fill( time );
-    h_EffEtaTot_phot->Fill( fabs(GoodPhotList[i]->p4().eta()) );
+    if( fabs(GoodPhotList[i]->p4().eta())<1.47 ){ h_GoodGamma_tEB->Fill( time ); h_GoodGamma_tEB2->Fill( time );}
+    if( fabs(GoodPhotList[i]->p4().eta())>1.50 ){ h_GoodGamma_tEE->Fill( time ); h_GoodGamma_tEE2->Fill( time );}
+    h_EffEta_phot->Fill( fabs(GoodPhotList[i]->p4().eta()) );
     if( time>-0.5 && time < 0.5 )  h_EffEta_phot1->Fill( fabs(GoodPhotList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_EffEta_phot2->Fill( fabs(GoodPhotList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_EffEta_phot3->Fill( fabs(GoodPhotList[i]->p4().eta()) );
@@ -501,7 +512,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   for(int i=0; i<int(BadPhotList.size()); i++){
     float time = GetTimeFromGamma( BadPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_BadGamma_t->Fill( time );
-    h_NEffEtaTot_phot->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_phot1->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_phot2->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time>-200 && time < 200. ) h_NEffEta_phot3->Fill( fabs(BadPhotList[i]->p4().eta()) );
@@ -615,7 +625,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
 	  if( V_cluster[nClu]->energy() > Emin ){
 	    Emin = V_cluster[nClu]->energy();
-	    BestTime = V_seeds[nClu].time(); BestTime+=T0_Vtx_MC; BestEne = V_seeds[nClu].energy();
+	    BestTime = V_seeds[nClu].time(); BestTime-=T0_Vtx_MC; BestEne = V_seeds[nClu].energy();
 	    ClustTL.SetPtEtaPhiE( V_cluster[nClu]->energy()/cosh(V_cluster[nClu]->eta()) , V_cluster[nClu]->eta(), V_cluster[nClu]->phi(), V_cluster[nClu]->energy() );
 	  }
 	}
@@ -1294,11 +1304,14 @@ void Generic_Analizer::endJob() {
   h_GoodJet_t->Write();
   h_GoodJet_tEB->Write();
   h_GoodJet_tEE->Write();
+  h_GoodJet_tEB2->Write();
+  h_GoodJet_tEE2->Write();
   h_BadJet_t->Write();
   h_GoodGamma_t->Write();
   h_GoodGamma_tEB->Write();
   h_GoodGamma_tEE->Write();
-  h_GoodGamma_t2->Write();
+  h_GoodGamma_tEB2->Write();
+  h_GoodGamma_tEE2->Write();
   h_Phot_DR->Write();
   h_Jet_DR->Write();
   h_PtGenJet->Write();
@@ -1316,10 +1329,11 @@ void Generic_Analizer::endJob() {
   h_NEffEta_jet2->Write();
   h_NEffEta_jet3->Write();
   h_EffEtaTot_phot->Write();
-  h_NEffEtaTot_phot->Write();
+  h_EffEta_phot->Write();
+  h_EffEta_jet->Write();
+  h_EffPt_jet->Write();
   h_EffEtaTot_jet->Write();
   h_EffPtTot_jet->Write();
-  h_NEffEtaTot_jet->Write();
   h_BadGamma_t->Write();
   h_Rh0->Write();
   h_NVtx->Write();
