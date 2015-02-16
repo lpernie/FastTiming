@@ -455,22 +455,23 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
 
   //Good Photons list
-  vector<const reco::Photon*> GoodPhotList, BadPhotList; GoodPhotList.clear(); BadPhotList.clear();
+  vector<const reco::Photon*> BadPhotList; BadPhotList.clear();
+  vector<const reco::PFJet*>  GoodPhotList;GoodPhotList.clear();
   for (auto& GenPar : *GenPars){
     if( GenPar.p4().Pt() < MinPt_Gen || GenPar.pdgId()!=22 || GenPar.status()!=1 ) continue;
     h_EventFlow->Fill(3);
     float DR_min = MinDR_asso, DR_minH=99.;
-    const reco::Photon* GoodPhot = 0;
-    GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
+    const reco::PFJet* GoodPhot = 0;
+    GlobalPoint PosGen( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
     h_EffEtaTot_phot->Fill( fabs(GenPar.eta()) );
-    for (auto& photon : *Photons){
-	if( photon.p4().Pt() < MinPt_Reco ) continue;
-	GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
-	float DR = DeltaR( PosPhot, PosGenJet );
-	//if( DR<DR_min && GenPar.p4().Pt()/photon.p4().Pt()<1.3 && GenPar.p4().Pt()/photon.p4().Pt()>0.7 )
+    for (auto& pfJet : *Jets){
+      if( pfJet.p4().Pt() < MinPt_Reco ) continue;
+	GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
+	float DR = DeltaR( PosJet, PosGen );
 	if( DR<DR_min ){
 	  DR_min = DR;
-	  GoodPhot = &photon;
+	  //GoodPhot = &photon;
+	  GoodPhot = &pfJet;
 	  h_EventFlow->Fill(4);
 	}
 	if( DR<DR_minH ){
@@ -486,8 +487,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     GlobalPoint PosPhot( photon.p4().X(),  photon.p4().Y(), photon.p4().Z() );
     bool isPU = true;
     for (auto& GenPar : *GenPars){
-	GlobalPoint PosGenJet( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
-	float DR = DeltaR( PosPhot, PosGenJet );
+	GlobalPoint PosGen( GenPar.p4().X(), GenPar.p4().Y(), GenPar.p4().Z() );
+	float DR = DeltaR( PosPhot, PosGen );
 	if( DR<MinDR_pu ){
 	  isPU = false;
 	}
@@ -500,7 +501,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Plots with Good and Bad photons
   for(int i=0; i<int(GoodPhotList.size()); i++){
-    float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    //float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    float time = GetTimeFromJet( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
     h_GoodGamma_t->Fill( time );
     if( fabs(GoodPhotList[i]->p4().eta())<1.47 ){ h_GoodGamma_tEB->Fill( time ); h_GoodGamma_tEB2->Fill( time );}
     if( fabs(GoodPhotList[i]->p4().eta())>1.50 ){ h_GoodGamma_tEE->Fill( time ); h_GoodGamma_tEE2->Fill( time );}
