@@ -458,7 +458,8 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   vector<const reco::Photon*> BadPhotList; BadPhotList.clear();
   vector<const reco::PFJet*>  GoodPhotList;GoodPhotList.clear();
   for (auto& GenPar : *GenPars){
-    if( GenPar.p4().Pt() < MinPt_Gen || GenPar.pdgId()!=22 || GenPar.status()!=1 ) continue;
+    //if( GenPar.p4().Pt() < MinPt_Gen || GenPar.pdgId()!=22 || GenPar.status()!=1 ) continue;
+    if( GenPar.pdgId()!=22 || GenPar.status()!=1 ) continue;
     h_EventFlow->Fill(3);
     float DR_min = MinDR_asso, DR_minH=99.;
     const reco::PFJet* GoodPhot = 0;
@@ -470,7 +471,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	float DR = DeltaR( PosJet, PosGen );
 	if( DR<DR_min ){
 	  DR_min = DR;
-	  //GoodPhot = &photon;
 	  GoodPhot = &pfJet;
 	  h_EventFlow->Fill(4);
 	}
@@ -1066,6 +1066,7 @@ float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<e
 	    h_DR_vs_Time_EB_reb->Fill( 0.0000001, seedtime ); h_DR_vs_Time_EB_reb2->Fill( 0.0000001, seedtime );
 	  }
 	  for( auto& rech : *recHitsEB ){
+	    if( rech.energy()<=0 ) continue;
 	    EBDetId IdXtal( rech.id() );
 	    const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
 	    GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( 0. );
@@ -1098,6 +1099,7 @@ float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<e
 	  }
 	  for( auto& rech : *recHitsEE ){
 	    EKDetId IdXtal( rech.id() );
+	    if( rech.energy()<=0 ) continue;
 	    const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
 	    GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( 0. );
 	    TLorentzVector PosRechit_tl; PosRechit_tl.SetPtEtaPhiM( rech.energy()/cosh(PosRechit.eta() ), PosRechit.eta(), PosRechit.phi(), 0. );
@@ -1131,6 +1133,7 @@ float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<e
 	    h_DR_vs_Time_EB_reb_b->Fill( 0.0000001, seedtime ); h_DR_vs_Time_EB_reb2_b->Fill( 0.0000001, seedtime );
 	  }
 	  for( auto& rech : *recHitsEB ){
+	    if( rech.energy()<=0 ) continue;
 	    EBDetId IdXtal( rech.id() );
 	    const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
 	    GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( 0. );
@@ -1154,6 +1157,7 @@ float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<e
 	erNine = Seed_info[8];
 	TLorentzVector Gamma_posit; Gamma_posit.SetPtEtaPhiE( Seed_info[4], Seed_info[5], Seed_info[6], Seed_info[7]);
 	//If found open a cone
+
 	if( Seed_info[0]!=-999. ){
 	  TLorentzVector Seed_pos; Seed_pos.SetPtEtaPhiM( Seed_info[0], Seed_info[1], Seed_info[2], 0. );
 	  float seedtime = Seed_info[3];
@@ -1162,6 +1166,7 @@ float Generic_Analizer::FillLateralDevel( reco::PFCandidate Gamma, edm::Handle<e
 	    h_DR_vs_Time_EE_reb_b->Fill( 0.0000001, seedtime ); h_DR_vs_Time_EE_reb2_b->Fill( 0.0000001, seedtime );
 	  }
 	  for( auto& rech : *recHitsEE ){
+	    if( rech.energy()<=0 ) continue;
 	    EKDetId IdXtal( rech.id() );
 	    const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
 	    GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( 0. );
