@@ -14,7 +14,7 @@ void FastTool::Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx  ){
   float T0_Vtx_MC = simVtxFirst->position().t() * pow(10,9);
  
   T0_   = T0_Vtx_MC;
-  VtxX_ = 0.;
-  VtxY_ = 0.;
-  VtxZ_ = 0.; 
+  VtxX_ = Vtx_sim.x();
+  VtxY_ = Vtx_sim.y();
+  VtxZ_ = Vtx_sim.z(); 
 }

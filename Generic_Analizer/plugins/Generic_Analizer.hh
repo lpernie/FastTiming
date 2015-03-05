@@ -231,8 +231,10 @@ class Generic_Analizer : public edm::EDAnalyzer {
     TH1F *h_R92;
     TTree * Tree_Vtx;
     Float_t VtxDet_T1;          
+    Float_t VtxDet_VBFT1;          
     Float_t VtxDet_GT1;          
     Float_t VtxDet_T2;          
+    Float_t VtxDet_VBFT2;          
     Float_t VtxDet_GT2;          
     Float_t VtxDet_time;        
     Float_t VtxDet_PosXtal_X1;  
@@ -241,6 +243,12 @@ class Generic_Analizer : public edm::EDAnalyzer {
     Float_t VtxDet_PosXtal_X2;  
     Float_t VtxDet_PosXtal_Y2;  
     Float_t VtxDet_PosXtal_Z2;  
+    Float_t VtxDet_PosVBF_X1;  
+    Float_t VtxDet_PosVBF_Y1;  
+    Float_t VtxDet_PosVBF_Z1;  
+    Float_t VtxDet_PosVBF_X2;  
+    Float_t VtxDet_PosVBF_Y2;  
+    Float_t VtxDet_PosVBF_Z2;  
     Float_t VtxDet_PosXtal_MCX1;  
     Float_t VtxDet_PosXtal_MCY1;  
     Float_t VtxDet_PosXtal_MCZ1;  

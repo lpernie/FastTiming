@@ -191,6 +191,14 @@ float DeltaR( GlobalPoint a, GlobalPoint b ){
   return( sqrt( deltaEta*deltaEta + deltaPhi*deltaPhi  ) );
 }
 
+float DeltaR( GlobalPoint a, TLorentzVector b ){
+  float deltaEta = a.eta() - b.Eta();
+  float deltaPhi = a.phi() - b.Phi();
+  if (deltaPhi > PI)  deltaPhi -= 2.*PI;
+  if (deltaPhi < -PI) deltaPhi += 2.*PI;
+  return( sqrt( deltaEta*deltaEta + deltaPhi*deltaPhi  ) );
+}
+
 double DeltaR( double eta1, double eta2, double phi1, double phi2 ){
   float deltaPhi = eta1 - eta2;
   float deltaEta = phi1 - phi2;

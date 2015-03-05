@@ -250,10 +250,14 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
     if( WannaFitT0Vtx_ ){
       Tree_Vtx = new TTree("Tree_Vtx","TTree for vertexing");
       Tree_Vtx->Branch("VtxDet_T1",&VtxDet_T1,"VtxDet_T1/F");
+      Tree_Vtx->Branch("VtxDet_VBFT1",&VtxDet_VBFT1,"VtxDet_VBFT1/F");
       Tree_Vtx->Branch("VtxDet_GT1",&VtxDet_GT1,"VtxDet_GT1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_X1",&VtxDet_PosXtal_X1,"VtxDet_PosXtal_X1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Y1",&VtxDet_PosXtal_Y1,"VtxDet_PosXtal_Y1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Z1",&VtxDet_PosXtal_Z1,"VtxDet_PosXtal_Z1/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_X1",&VtxDet_PosVBF_X1,"VtxDet_PosVBF_X1/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_Y1",&VtxDet_PosVBF_Y1,"VtxDet_PosVBF_Y1/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_Z1",&VtxDet_PosVBF_Z1,"VtxDet_PosVBF_Z1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCX1",&VtxDet_PosXtal_MCX1,"VtxDet_PosXtal_MCX1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCY1",&VtxDet_PosXtal_MCY1,"VtxDet_PosXtal_MCY1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCZ1",&VtxDet_PosXtal_MCZ1,"VtxDet_PosXtal_MCZ1/F");
@@ -261,10 +265,14 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
       Tree_Vtx->Branch("VtxDet_PtMCJet_1",&VtxDet_PtMCJet_1,"VtxDet_PtMCJet_1/F");
       Tree_Vtx->Branch("VtxDet_time",&VtxDet_time,"VtxDet_time/F");
       Tree_Vtx->Branch("VtxDet_T2",&VtxDet_T2,"VtxDet_T2/F");
+      Tree_Vtx->Branch("VtxDet_VBFT2",&VtxDet_VBFT2,"VtxDet_VBFT2/F");
       Tree_Vtx->Branch("VtxDet_GT2",&VtxDet_GT2,"VtxDet_GT2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_X2",&VtxDet_PosXtal_X2,"VtxDet_PosXtal_X2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Y2",&VtxDet_PosXtal_Y2,"VtxDet_PosXtal_Y2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Z2",&VtxDet_PosXtal_Z2,"VtxDet_PosXtal_Z2/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_X2",&VtxDet_PosVBF_X2,"VtxDet_PosVBF_X2/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_Y2",&VtxDet_PosVBF_Y2,"VtxDet_PosVBF_Y2/F");
+      Tree_Vtx->Branch("VtxDet_PosVBF_Z2",&VtxDet_PosVBF_Z2,"VtxDet_PosVBF_Z2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCX2",&VtxDet_PosXtal_MCX2,"VtxDet_PosXtal_MCX2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCY2",&VtxDet_PosXtal_MCY2,"VtxDet_PosXtal_MCY2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_MCZ2",&VtxDet_PosXtal_MCZ2,"VtxDet_PosXtal_MCZ2/F");
@@ -392,7 +400,6 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       if( pfJet.p4().Pt() < MinPt_Reco ) continue;
 	GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
 	float DR = DeltaR( PosJet, PosGenJet );
-	//if( DR<DR_min && pfGenJet.p4().Pt()/pfJet.p4().Pt()<1.3 && pfGenJet.p4().Pt()/pfJet.p4().Pt()>0.7 )
 	if( DR<DR_min ){
 	  DR_min = DR;
 	  GoodJet = &pfJet;
@@ -520,9 +527,28 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Hgg MC Photons
   TLorentzVector Gamma1, Gamma2; Gamma1.SetPtEtaPhiE( -1., -1., -1., -1. ); Gamma2.SetPtEtaPhiE( -1., -1., -1., -1. );
+  TLorentzVector VBF1, VBF2; VBF1.SetPtEtaPhiE( -1., -1., -1., -1. ); VBF2.SetPtEtaPhiE( -1., -1., -1., -1. );
   bool MC_pres=false;
   if( isHgg_ ){
     bool firstnotfound = true;
+    //VBG Jets
+    float tmpPt = 20.;
+    for (auto& pfGenJet : *GenJets){
+	if( pfGenJet.p4().Pt()<20. ) continue;
+	if( pfGenJet.p4().Pt() > tmpPt ){
+	  tmpPt = pfGenJet.p4().Pt();
+	  VBF1.SetPtEtaPhiE( pfGenJet.p4().Pt(), pfGenJet.p4().Eta(), pfGenJet.p4().Phi(), pfGenJet.p4().E() );
+	}
+    }
+    tmpPt = 20.;
+    for (auto& pfGenJet : *GenJets){
+	if( pfGenJet.p4().Pt()<20. || pfGenJet.p4().Pt() == VBF1.Pt() ) continue;
+	if( pfGenJet.p4().Pt() > tmpPt ){
+	  tmpPt = pfGenJet.p4().Pt();
+	  VBF2.SetPtEtaPhiE( pfGenJet.p4().Pt(), pfGenJet.p4().Eta(), pfGenJet.p4().Phi(), pfGenJet.p4().E() );
+	}
+    }
+    //GAMMAS FROM H
     for (auto& GenPar : *GenPars){
 	if( GenPar.pdgId()==22 && GenPar.mother()->pdgId()==25 && firstnotfound ){
 	  Gamma1.SetPtEtaPhiE( GenPar.pt(), GenPar.p4().Eta(), GenPar.p4().Phi(), GenPar.p4().E() );
@@ -824,10 +850,36 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     // Associate MC gammas with PFCand == gamma
     TLorentzVector gamma_reco1, gamma_reco2; gamma_reco1.SetPtEtaPhiE( -1., -1., -1., -1. ); gamma_reco2.SetPtEtaPhiE( -1., -1., -1., -1. );
     reco::PFCandidate Pfgamma1_re, Pfgamma2_re;
+    const reco::PFJet* VBF1_re=0, *VBF2_re=0;
     float PU_frac_1(1.), PU_frac_2(1.);
     float R91(-1.), R92(-1.);
     std::vector<float> v_R9; v_R9.clear();
+    bool foundVBF1=false, foundVBF2=false;
     if( MC_pres ){
+	//Assocation VBFJets
+	float DR_min = MinDR_asso;
+	for (auto& pfJet : *Jets){
+	  if( pfJet.p4().Pt() < MinPt_Reco ) continue;
+	  GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
+	  float DR = DeltaR( PosJet, VBF1 );
+	  if( DR<DR_min ){
+	    DR_min = DR;
+	    VBF1_re = &pfJet;
+	    foundVBF1 = true;
+	  }
+	}
+	DR_min = MinDR_asso;
+	for (auto& pfJet : *Jets){
+	  if( pfJet.p4().Pt() < MinPt_Reco ) continue;
+	  GlobalPoint PosJet( pfJet.p4().X(), pfJet.p4().Y(), pfJet.p4().Z() );
+	  float DR = DeltaR( PosJet, VBF2 );
+	  if( DR<DR_min ){
+	    DR_min = DR;
+	    VBF2_re = &pfJet;
+	    foundVBF2 = true;
+	  }
+	}
+	//Association Gammas
 	float miniDr = 0.1; 
 	for (auto& pfcan : *PFCol){
 	  float ErreNove = FillLateralDevel( pfcan, recHitsEB, recHitsEE, false ); //For Sig + Bkg
@@ -864,11 +916,15 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	  vector<float> Seed_info2 = fabs(Pfgamma2_re.p4().eta())<1.5 ? GetSeedFromSC( true, Pfgamma2_re, recHitsEB, recHitsEE, false, true ) : GetSeedFromSC( false, Pfgamma2_re, recHitsEB, recHitsEE, false, true ); //Seed_PtEtaPhiTime_CluPeEtaPhiE (def. -999.)
 	  TLorentzVector Seed1_tl; Seed1_tl.SetPtEtaPhiM( Seed_info1[0], Seed_info1[1], Seed_info1[2], 0. );
 	  TLorentzVector Seed2_tl; Seed2_tl.SetPtEtaPhiM( Seed_info2[0], Seed_info2[1], Seed_info2[2], 0. );
+	  //TLorentzVector SeedVBF1_tl; SeedVBF1_tl.SetPtEtaPhiM( foundVBF1 ? VBF1_re->p4().pt() : -999., foundVBF1 ? VBF1_re->p4().eta() : -999., foundVBF1 ? VBF1_re->p4().phi() : -999., 0. );
+	  //TLorentzVector SeedVBF2_tl; SeedVBF2_tl.SetPtEtaPhiM( foundVBF2 ? VBF2_re->p4().pt() : -999., foundVBF2 ? VBF2_re->p4().eta() : -999., foundVBF2 ? VBF2_re->p4().phi() : -999., 0. );
 	  if( Seed_info1[3]!=-999 && Seed_info2[3]!=-999 ){
 	    GlobalPoint PosTot(  Seed1_tl.X()-Vtx_sim.x(),  Seed1_tl.Y()-Vtx_sim.y() ,  Seed1_tl.Z()-Vtx_sim.z() );
 	    float tof1 = T0_Vtx_MC +  sqrt( pow(PosTot.x(),2) + pow(PosTot.y(),2) + pow(PosTot.z(),2) )/(LIGHT_SPEED);
 	    GlobalPoint PosTot2(  Seed2_tl.X()-Vtx_sim.x(),  Seed2_tl.Y()-Vtx_sim.y() ,  Seed2_tl.Z()-Vtx_sim.z() );
 	    float tof2 = T0_Vtx_MC +  sqrt( pow(PosTot2.x(),2) + pow(PosTot2.y(),2) + pow(PosTot2.z(),2) )/(LIGHT_SPEED);
+	    VtxDet_VBFT1       = foundVBF1 ? GetTimeFromJet( VBF1_re, recHitsEB, recHitsEE ) : -999.; 
+	    VtxDet_VBFT2       = foundVBF2 ? GetTimeFromJet( VBF2_re, recHitsEB, recHitsEE ) : -999.;
 	    VtxDet_T1          = Seed_info1[3];
 	    VtxDet_T2          = Seed_info2[3];
 	    VtxDet_GT1         = tof1;
@@ -880,6 +936,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	    VtxDet_PosXtal_X2  = Seed2_tl.X();
 	    VtxDet_PosXtal_Y2  = Seed2_tl.Y();
 	    VtxDet_PosXtal_Z2  = Seed2_tl.Z();
+	    VtxDet_PosVBF_X1   = foundVBF1 ? VBF1_re->p4().X() : -999.;
+	    VtxDet_PosVBF_Y1   = foundVBF1 ? VBF1_re->p4().Y() : -999.;
+	    VtxDet_PosVBF_Z1   = foundVBF1 ? VBF1_re->p4().Z() : -999.;
+	    VtxDet_PosVBF_X2   = foundVBF2 ? VBF2_re->p4().X() : -999.;
+	    VtxDet_PosVBF_Y2   = foundVBF2 ? VBF2_re->p4().Y() : -999.;
+	    VtxDet_PosVBF_Z2   = foundVBF2 ? VBF2_re->p4().Z() : -999.;
 	    VtxDet_PosXtal_MCX1= Gamma1.X();
 	    VtxDet_PosXtal_MCY1= Gamma1.Y();
 	    VtxDet_PosXtal_MCZ1= Gamma1.Z();
@@ -1480,6 +1542,7 @@ void Generic_Analizer::endJob() {
     Tree_Vtx->Write();
   }
 }
+
 // ------------------------------------------------------------------------------------------
 std::vector<DetId> Generic_Analizer::getPFJetRecHitsDR(reco::PFCandidate pfCa, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEB, edm::Handle<edm::SortedCollection<EcalRecHit> >& recHitsEE, const edm::EventSetup& iSetup)
 {

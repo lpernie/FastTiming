@@ -76,9 +76,9 @@ void SumEtPlot( TString OutPutFolder="plots", TString mode="SumEtPlots", TString
   }
   if( mode == "SumEtPlots" ){
     //Open Files
-    TFile* File140 = TFile::Open( "../../../Hgg_140PU.root" );
+    TFile* File140 = TFile::Open( "../../../Hgg_140PU_SumEt140.root" );
     if( !File140 ) cout<<"WARNING: File GenericAnalyzer_Higgs_140.root do not exist"<<endl;
-    TFile* File0 = TFile::Open( "../../../Hgg_noPU.root" );
+    TFile* File0 = TFile::Open( "../../../Hgg_noPU_EunEtEB.root" );
     if( !File0 ) cout<<"WARNING: File GenericAnalyzer_Higgs_0.root do not exist"<<endl;
     myc1->cd();
     gStyle->SetPalette(1);

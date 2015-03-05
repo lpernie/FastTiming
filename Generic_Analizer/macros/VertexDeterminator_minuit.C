@@ -200,18 +200,19 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	if( nentries<500 && iEntry%10==0  ) cout<<" You are at the "<<iEntry<<"/"<<nentries<<" event"<<endl;
 	Tree->GetEntry(iEntry);
 	if( resInd==0 ) ev_flow->Fill(0.);
+	VtxDet_T1-=VtxDet_time; VtxDet_T2-=VtxDet_time;
 	if( VtxDet_T1<-900. || VtxDet_PosXtal_X1<-900. || VtxDet_PosXtal_Y1<-900. || VtxDet_PosXtal_Z1<-900. || VtxDet_PtRecoJet_1<-900. || VtxDet_PtMCJet_1<-900. ) continue;
 	if( VtxDet_T2<-900. || VtxDet_PosXtal_X2<-900. || VtxDet_PosXtal_Y2<-900. || VtxDet_PosXtal_Z2<-900. || VtxDet_PtRecoJet_2<-900. || VtxDet_PtMCJet_2<-900. ) continue;
 	if( resInd==0 ) ev_flow->Fill(1.);
 	//Resolution
-	if( (VtxDet_PtRecoJet_1/VtxDet_PtMCJet_1<0.9 || VtxDet_PtRecoJet_1/VtxDet_PtMCJet_1>1.1) || (VtxDet_PtRecoJet_2/VtxDet_PtMCJet_2<0.9 || VtxDet_PtRecoJet_2/VtxDet_PtMCJet_2>1.1) ) continue;
+	if( (VtxDet_PtRecoJet_1/VtxDet_PtMCJet_1<0.8 || VtxDet_PtRecoJet_1/VtxDet_PtMCJet_1>1.2) || (VtxDet_PtRecoJet_2/VtxDet_PtMCJet_2<0.8 || VtxDet_PtRecoJet_2/VtxDet_PtMCJet_2>1.2) ) continue;
 	if( resInd==0 ) ev_flow->Fill(2.);
 	//PT Cut
 	TVector3 pos1; pos1.SetXYZ(VtxDet_PosXtal_X1, VtxDet_PosXtal_Y1, VtxDet_PosXtal_Z1);
 	TVector3 pos2; pos2.SetXYZ(VtxDet_PosXtal_X2, VtxDet_PosXtal_Y2, VtxDet_PosXtal_Z2);
 	TVector3 pos1MC; pos1MC.SetXYZ(VtxDet_PosXtal_MCX1, VtxDet_PosXtal_MCY1, VtxDet_PosXtal_MCZ1);
 	TVector3 pos2MC; pos2MC.SetXYZ(VtxDet_PosXtal_MCX2, VtxDet_PosXtal_MCY2, VtxDet_PosXtal_MCZ2);
-	float PtCut = 5;
+	float PtCut = 15;
 	if(sele=="0") PtCut = 0;
 	if( VtxDet_PtRecoJet_1 < PtCut || VtxDet_PtRecoJet_2 < PtCut ) continue;
 	if( resInd==0 ) ev_flow->Fill(3.);
@@ -231,13 +232,13 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	  XtalsEta->Fill( pos1.Eta() ); XtalsEta->Fill( pos2.Eta() ); 
 	  XtalsPhi->Fill( pos1.Phi() ); XtalsPhi->Fill( pos2.Phi() );
 	  isEBEE->Fill(0); 
-	  if( fabs(pos1.Eta())<1.4 && fabs(pos2.Eta())<1.4  )      isEBEE->Fill(1); 
-	  else if( fabs(pos1.Eta())>1.4 && fabs(pos2.Eta())>1.4  ) isEBEE->Fill(2); 
+	  if( fabs(pos1.Eta())<1.5 && fabs(pos2.Eta())<1.5  )      isEBEE->Fill(1); 
+	  else if( fabs(pos1.Eta())>1.5 && fabs(pos2.Eta())>1.5  ) isEBEE->Fill(2); 
 	  else                                                     isEBEE->Fill(3); 
 	}
 	if( OnlyEB==1 && (fabs(pos1.Eta())>1.5 || fabs(pos2.Eta())>1.5) ) continue;
 	if( OnlyEB==2 && fabs(pos1.Eta())<1.5 && fabs(pos2.Eta())<1.5 ) continue;
-	//if( OnlyEB==2 && (fabs(pos1.Eta())<1.4 || fabs(pos2.Eta())<1.4 ) ) continue;
+	//if( OnlyEB==2 && (fabs(pos1.Eta())<1.5 || fabs(pos2.Eta())<1.5 ) ) continue;
 	if( resInd==0 ) ev_flow->Fill(5.);
 	//vertex Reco
 	if( resInd==0 ) VertexReso_z->Fill( vzRECO-vzMC );
@@ -260,7 +261,9 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	  h_DeltaEta2->Fill( pos2MC.Eta()-pos2.Eta() );
 	  h_DeltaPhi2->Fill( pos2MC.Phi()-pos2.Phi() );
 	}
-	bool passEtaPhiReco( Makemax( fabs(pos1MC.Eta()-pos1.Eta()), fabs(pos2MC.Eta()-pos2.Eta()) )<0.05 && Makemax( fabs(pos1MC.Phi()-pos1.Phi()), fabs(pos2MC.Phi()-pos2.Phi()) )<0.025 );
+	float MaxEta = Makemax( fabs(pos1MC.Eta()-pos1.Eta()), fabs(pos2MC.Eta()-pos2.Eta()) );
+	float MaxPhi = Makemax( fabs(pos1MC.Phi()-pos1.Phi()), fabs(pos2MC.Phi()-pos2.Phi()) );
+	bool passEtaPhiReco( MaxEta < 0.05 && MaxPhi < 0.025 );
 	if( !passEtaPhiReco && sele!="0" ) continue;
 	if( resInd==0 ) ev_flow->Fill(7.);
 
@@ -304,26 +307,26 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	Correl_Resol_Vtx->Fill(sigma_T1, Best_Vz-vzMC );
 	Correl_Resol_T0->Fill(sigma_T1, Best_t0-VtxDet_time );
     }//All events
-
-    TString Hname = OutPutFolder + "/Final_Vertex_" + SmearInd.str() + ".png";
+    string smr = SmearInd.str();
+    TString Hname = OutPutFolder + "/Final_Vertex_" + TString(smr) + ".png";
     Final_Vtx->Draw(); gStyle->SetOptStat(111111); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/Delta_Vertex_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/Delta_Vertex_" + TString(smr) + ".png";
     DeltaVtx->Draw(); gStyle->SetOptStat(111111); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/Delta_T0_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/Delta_T0_" + TString(smr) + ".png";
     DeltaT0->Draw(); gStyle->SetOptStat(111111); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/Time0_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/Time0_" + TString(smr) + ".png";
     hBest_t0->Draw(); gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/VtxMc_VtxRec_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/VtxMc_VtxRec_" + TString(smr) + ".png";
     VtxMc_VtxRec->Draw("colz"); gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/Pull_Vtx_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/Pull_Vtx_" + TString(smr) + ".png";
     Pull_Vtx->Draw(); gStyle->SetOptStat(111111); myc1->SaveAs( Hname.Data() );
 
-    Hname = OutPutFolder + "/Pull_T0_" + SmearInd.str() + ".png";
+    Hname = OutPutFolder + "/Pull_T0_" + TString(smr) + ".png";
     Pull_T0->Draw(); gStyle->SetOptStat(111111); myc1->SaveAs( Hname.Data() );
 
     delete Final_Vtx;
@@ -406,7 +409,9 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   TH1D *VtxRMS = new TH1D("VtxRMS", "", 100, 0.001, 0.04);
   int index(0);
   for(int i=0; i<Correl_Resol_Vtx->GetNbinsX(); i++){
+cout<<"AAAA!!1 "<<i<<endl;
     if( Correl_Resol_Vtx->ProjectionY(" ",i+1,i+1)->Integral()>0. ){
+cout<<"AAAA!!2 "<<i<<endl;
 	double quant[2], value[2];
 	TH1D *h1 = Correl_Resol_Vtx->ProjectionY(" ",i+1,i+1);
 	//for(int NN=0; NN<h1->GetNbinsX(); NN++){ if( h1->GetBinContent(NN+1)>1 ) h1->SetBinContent(NN+1, h1->GetBinContent(NN+1) ); }
@@ -417,23 +422,23 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	if(OnlyEB==1) h1->Rebin(4);
 	if(OnlyEB==2){ h1->Rebin(2); }//if(!XminXmax0 || (XminXmax0 && i>25) ) h1->Rebin(2); }
 	h1->GetXaxis()->SetRangeUser(Min, Max);
-	if(i==6  && OnlyEB==2 )  h1->GetXaxis()->SetRangeUser(-0.3, 0.3);
-	if(i==6  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
-	if(i==10  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
-	if(i==15  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
-	if(i==19  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
-	if(i==24  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
-	if(i==28  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-3., 2.);
-	if(i==33  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2.5, 2.5);
-	if(i==6  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.5, 0.5);
-	if(i==10  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.65, 0.65);
-	if(i==15  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.8, 0.8);
-	if(i==19  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1., 1.);
-	if(i==24  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1., 1.);
-	if(i==28  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.5, 1.);
-	if(i==33  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.5, 1.5);
-	if(i==38  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.8, 1.8);
-	if(i==43  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-2., 2.);
+//	if(i==6  && OnlyEB==2 )  h1->GetXaxis()->SetRangeUser(-0.3, 0.3);
+//	if(i==6  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
+//	if(i==10  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
+//	if(i==15  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
+//	if(i==19  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
+//	if(i==24  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2., 2.);
+//	if(i==28  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-3., 2.);
+//	if(i==33  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-2.5, 2.5);
+//	if(i==6  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.5, 0.5);
+//	if(i==10  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.65, 0.65);
+//	if(i==15  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-0.8, 0.8);
+//	if(i==19  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1., 1.);
+//	if(i==24  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1., 1.);
+//	if(i==28  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.5, 1.);
+//	if(i==33  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.5, 1.5);
+//	if(i==38  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-1.8, 1.8);
+//	if(i==43  && OnlyEB==2 && XminXmax0) h1->GetXaxis()->SetRangeUser(-2., 2.);
 
 	TF1 *MyRms = new TF1("MyRms","gaus", Min+0.01, Max-0.01);
 	MyRms->SetParName(0,"Normalizzazione"); MyRms->SetParameters(0,h1->Integral());
@@ -461,9 +466,10 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	//	m.migrad();
 	//	RooFitResult* res = m.save();
 
+cout<<"AAAA!!3 "<<i<<endl;
 	VtxRMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
 	VtxRMS->SetBinError( i+1, h1->GetRMSError() );
-	stringstream Ind; Ind << i; h1->Draw(); Hname = OutPutFolder + "/VTXRMS_" + Ind.str()  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
+	stringstream Ind; Ind << i; string Indst = Ind.str();cout<<"AAAAOOOO "<<Indst<<endl; h1->Draw(); Hname = OutPutFolder + "/VTXRMS_" + TString(Indst)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 	delete h1;
 	//delete MyRms;
     }
@@ -515,7 +521,7 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	h1->Fit("MyRms");
 	T0RMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
 	T0RMS->SetBinError( i+1, h1->GetRMSError() );
-	stringstream Ind; Ind << i; h1->Draw(); Hname = OutPutFolder + "/T0RMS_" + Ind.str()  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
+	stringstream Ind; Ind << i; string Indstr = Ind.str(); h1->Draw(); Hname = OutPutFolder + "/T0RMS_" + TString(Indstr)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 	delete h1;
     }
   }
