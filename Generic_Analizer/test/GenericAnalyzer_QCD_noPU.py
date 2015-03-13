@@ -39,6 +39,7 @@ process.source = cms.Source("PoolSource",
    #"root://xrootd-cms.infn.it//store/user/lpernie/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step1_140PU_V1/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step3_140PU_V1/7d29be1aeee7600c1e4046dde551424b/step3_992_1_A6n.root",
    #"root://xrootd-cms.infn.it//store/user/lpernie/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step1_140PU_V1/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step3_140PU_V1/7d29be1aeee7600c1e4046dde551424b/step3_994_1_CUV.root",
    #"root://xrootd-cms.infn.it//store/user/lpernie/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step1_140PU_V1/SingleGamma_Pt35_FastTiming_Shashlik_PU140_TuneZ2starpythia6_cff_py_GEN_step3_140PU_V1/7d29be1aeee7600c1e4046dde551424b/step3_998_4_Uvv.root"
+   #"root://eoscms//eos/cms/store/caf/user/amartell/fastTiming/QCD_Pt15_500_14TeV_RECO_PU140inTime/QCD_14TeV_\upgradePLS3_RECO_140PUinTime_20.root"
    "root://eoscms//eos/cms/store/caf/user/amartell/fastTiming/QCD_Pt15_500_14TeV_Tune4C_RECO_PU140inTime/QCD_14TeV_upgradePLS3_RECO_140PUinTime_1.root",
    "root://eoscms//eos/cms/store/caf/user/amartell/fastTiming/QCD_Pt15_500_14TeV_Tune4C_RECO_PU140inTime/QCD_14TeV_upgradePLS3_RECO_140PUinTime_10.root",
    "root://eoscms//eos/cms/store/caf/user/amartell/fastTiming/QCD_Pt15_500_14TeV_Tune4C_RECO_PU140inTime/QCD_14TeV_upgradePLS3_RECO_140PUinTime_100.root",  

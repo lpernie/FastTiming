@@ -55,23 +55,32 @@
 using namespace RooFit;
 using namespace std;
 
+//Par: 0 T1Meas 1 PosX1 2 PosY1 3 PosZ1 4 T1Unc 5 T2Meas 6 PosX2 7 PosY2 8 PosZ2 9 T2Unc 10 Vz[FIND!] 11 T0[FIND] 12 Vx 13 Vy 14 TJet1 15 TJet2 16 Jet1X 17 Jet1Y 18 Jet1Z 19 Jet2X 20 Jet2Y 21 Jet2Y
 void chi2Hist(Int_t &npar, Double_t *gin, Double_t &f, Double_t *par, Int_t iflag) {
 
   Double_t chi2(0.);
   TVector3 Vtx;     Vtx.SetXYZ( par[12], par[13], par[10]);
   TVector3 posExp1; posExp1.SetXYZ(par[1], par[2], par[3] );
   TVector3 posExp2; posExp2.SetXYZ(par[6], par[7], par[8] );
-  posExp1 -= Vtx; posExp2 -= Vtx;
+  TVector3 posExpJet1; posExpJet1.SetXYZ(par[16], par[17], par[18] );
+  TVector3 posExpJet2; posExpJet2.SetXYZ(par[19], par[20], par[21] );
+  posExp1 -= Vtx; posExp2 -= Vtx; posExpJet1 -= Vtx; posExpJet2 -= Vtx;
   float distExp1 = sqrt( pow(posExp1.X(),2) + pow(posExp1.Y(),2) + pow(posExp1.Z(),2) );
   float distExp2 = sqrt( pow(posExp2.X(),2) + pow(posExp2.Y(),2) + pow(posExp2.Z(),2) );
+  float distExpJet1 = sqrt( pow(posExpJet1.X(),2) + pow(posExpJet1.Y(),2) + pow(posExpJet1.Z(),2) );
+  float distExpJet2 = sqrt( pow(posExpJet2.X(),2) + pow(posExpJet2.Y(),2) + pow(posExpJet2.Z(),2) );
   float Texp1 = par[11] + (distExp1)/29.9792458;  //Time c [cm/ns]
   float Texp2 = par[11] + (distExp2)/29.9792458;  //Time c [cm/ns]
-  chi2 = pow(par[0]-Texp1, 2)/pow(par[4],2) + pow(par[5]-Texp2, 2)/pow(par[9],2);
-
+  float TexpJet1 = par[16] == -999. ? -999. : par[11] + (distExpJet1)/29.9792458;  //Time c [cm/ns]
+  float TexpJet2 = par[19] == -999. ? -999. : par[11] + (distExpJet2)/29.9792458;  //Time c [cm/ns]
+  // In the case you have no VBFJet the last two terms are -999. - -999. and yould not change the minimization
+  //        (T1(vtx) - T1Exp)/Sigma(T)      +    (T2(vtx) - T2Exp)/Sigma(T)      +  (Tjet1(vtx) - Tjet1Exp)/Sigma(T)  +  (Tjet2(vtx) - Tjet2Exp)/Sigma(T)
+  chi2 = pow(par[0]-Texp1, 2)/pow(par[4],2) + pow(par[5]-Texp2, 2)/pow(par[9],2) + pow(par[14]-TexpJet1, 2)/pow(par[4],2) + pow(par[15]-TexpJet2, 2)/pow(par[4],2);
+  //chi2 = pow(par[0]-Texp1, 2)/pow(par[4],2) + pow(par[5]-Texp2, 2)/pow(par[9],2);
   f=chi2;
 }
 
-vector<float> ComputeVertex( float Gtime1, float Gtime2, float sigma_T1, float sigma_T2, TVector3 posExp1, TVector3 posExp2, bool T0Free, float VtxDet_timem, float Vx, float Vy);
+vector<float> ComputeVertex( float Gtime1, float Gtime2, float sigma_T1, float sigma_T2, TVector3 posExp1, TVector3 posExp2, bool T0Free, float VtxDet_timem, float Vx, float Vy, float TJet1, float TJet2, float Jet_posX1, float Jet_posY1, float Jet_posZ1, float Jet_posX2, float Jet_posY2, float Jet_posZ2);
 float Makemin( float a, float b);
 float Makemax( float a, float b);
 
@@ -80,8 +89,8 @@ float Makemax( float a, float b);
 // OnlyEB       = 0: EB and EE together - 1: only EB - 2: only EE
 // OutPutFolder = Name of the output folder
 //.x VertexDeterminator_minuit.C+("../GenericAnalyzer_Higgs_140.root", false, 0, "VTX_Output_T0FIX_EBEE_140PU", "std") 
-//void VertexDeterminator_minuit( TString NameFile, bool T0Free = true, int OnlyEB = 0, TString OutPutFolder = "VTX_Output", TString sele = "std","0" ){
-void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TString OutPutFolder, TString sele = "std" ){
+//void VertexDeterminator_minuit( TString NameFile, bool T0Free = true, int OnlyEB = 0, TString OutPutFolder = "VTX_Output", TString sele = "std","0" )
+void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool T0Free=true , int OnlyEB=0 , TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF", TString sele = "std" ){
 
   //Initial Stuffs
   if(T0Free) cout<<"----> START VertexDeterminator. T0 is Free"<<endl;
@@ -107,12 +116,16 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   if( !Tree ) cout<<"WARNING: Tree "<<TreeName.Data()<<" do not exist"<<endl;
   myc1->cd();
   gStyle->SetPalette(1);
-
+  //OutPut
+  TString outname = OutPutFolder + "/OutFile.root";
+  TFile *outfile = new TFile(outname.Data(),"RECREATE");
+  outfile->cd();
   //Get Variables
   Float_t VtxDet_T1, VtxDet_T2, VtxDet_GT1, VtxDet_GT2, VtxDet_time;
   Float_t VtxDet_PosXtal_X1, VtxDet_PosXtal_Y1, VtxDet_PosXtal_Z1, VtxDet_PosXtal_MCX1, VtxDet_PosXtal_MCY1, VtxDet_PosXtal_MCZ1, VtxDet_PtRecoJet_1, VtxDet_PtMCJet_1;
   Float_t VtxDet_PosXtal_X2, VtxDet_PosXtal_Y2, VtxDet_PosXtal_Z2, VtxDet_PosXtal_MCX2, VtxDet_PosXtal_MCY2, VtxDet_PosXtal_MCZ2, VtxDet_PtRecoJet_2, VtxDet_PtMCJet_2;
   Float_t vzMC, vxMC, vyMC, vzRECO, vxRECO, vyRECO;
+  Float_t VtxDet_VBFT1, VtxDet_VBFT2, VtxDet_PosVBF_X1, VtxDet_PosVBF_Y1, VtxDet_PosVBF_Z1, VtxDet_PosVBF_X2, VtxDet_PosVBF_Y2, VtxDet_PosVBF_Z2, VtxDet_VBFGT1, VtxDet_VBFGT2;
   Tree->SetBranchAddress( "VtxDet_T1", &VtxDet_T1);
   Tree->SetBranchAddress( "VtxDet_GT1", &VtxDet_GT1);
   Tree->SetBranchAddress( "VtxDet_T2", &VtxDet_T2);
@@ -140,6 +153,16 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   Tree->SetBranchAddress( "vzRECO", &vzRECO);
   Tree->SetBranchAddress( "vxRECO", &vxRECO);
   Tree->SetBranchAddress( "vyRECO", &vyRECO);
+  Tree->SetBranchAddress( "VtxDet_VBFT1", &VtxDet_VBFT1);
+  Tree->SetBranchAddress( "VtxDet_VBFGT1", &VtxDet_VBFGT1);
+  Tree->SetBranchAddress( "VtxDet_VBFT2", &VtxDet_VBFT2);
+  Tree->SetBranchAddress( "VtxDet_VBFGT2", &VtxDet_VBFGT2);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_X1", &VtxDet_PosVBF_X1);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_Y1", &VtxDet_PosVBF_Y1);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_Z1", &VtxDet_PosVBF_Z1);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_X2", &VtxDet_PosVBF_X2);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_Y2", &VtxDet_PosVBF_Y2);
+  Tree->SetBranchAddress( "VtxDet_PosVBF_Z2", &VtxDet_PosVBF_Z2);
 
   //Histos
   TH1F *ev_flow            = new TH1F("ev_flow","Event Flow", 8, -0.5, 7.5);
@@ -149,11 +172,13 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   TH1F *hdeta              = new TH1F("hdeta","#Delta #eta #gamma_1 #gamma_2", 100, 0., 6.); hdeta->GetXaxis()->SetTitle("#Delta #eta");
   TH1F *T1                 = new TH1F("T1","First Cluster Time", 100, -0.6, 0.6); T1->GetXaxis()->SetTitle("Time [ns]");
   TH1F *T2                 = new TH1F("T2","Second Cluster Time", 100, -0.6, 0.6); T2->GetXaxis()->SetTitle("Time [ns]");
+  TH1F *TVBF1              = new TH1F("TVBF1","First Cluster Time", 100, -0.6, 0.6); TVBF1->GetXaxis()->SetTitle("Time [ns]");
+  TH1F *TVBF2              = new TH1F("TVBF2","Second Cluster Time", 100, -0.6, 0.6); TVBF2->GetXaxis()->SetTitle("Time [ns]");
   TH1F *XtalsEta           = new TH1F("XtalsEta","#eta Xtals", 100, -3, 3.); XtalsEta->GetXaxis()->SetTitle("#eta");
   TH1F *XtalsPhi           = new TH1F("XtalsPhi","#phi Xtals", 100, -3.14, 3.14); XtalsPhi->GetXaxis()->SetTitle("#phi");
   TH1F *isEBEE             = new TH1F("isEBEE","", 4, -0.5, 3.5); isEBEE->GetXaxis()->SetBinLabel(1,"ALL"); isEBEE->GetXaxis()->SetBinLabel(2,"EB"); isEBEE->GetXaxis()->SetBinLabel(3,"EE"); isEBEE->GetXaxis()->SetBinLabel(4,"MIX");
-  TH2F *Correl_Resol_Vtx   = new TH2F("Correl_Resol_Vtx","", 100, 0.0, 0.04, 600, -8., 8.); Correl_Resol_Vtx->GetXaxis()->SetTitle("Time Resolution"); Correl_Resol_Vtx->GetYaxis()->SetTitle("Vtx Resolution");
-  TH2F *Correl_Resol_T0    = new TH2F("Correl_Resol_T0","", 100, 0.0, 0.04, 600, -0.4, 0.4); Correl_Resol_T0->GetXaxis()->SetTitle("Time Resolution"); Correl_Resol_T0->GetYaxis()->SetTitle("T0 Resolution");
+  TH2F *Correl_Resol_Vtx   = new TH2F("Correl_Resol_Vtx","", 100, 0.0, 0.05, 600, -8., 8.); Correl_Resol_Vtx->GetXaxis()->SetTitle("Time Resolution"); Correl_Resol_Vtx->GetYaxis()->SetTitle("Vtx Resolution");
+  TH2F *Correl_Resol_T0    = new TH2F("Correl_Resol_T0","", 100, 0.0, 0.05, 600, -0.4, 0.4); Correl_Resol_T0->GetXaxis()->SetTitle("Time Resolution"); Correl_Resol_T0->GetYaxis()->SetTitle("T0 Resolution");
   TH1F *VertexReso_z       = new TH1F("VertexReso_z","", 100, -0.05, 0.05); VertexReso_z->GetXaxis()->SetTitle("vtx Z_MC - Z_RECO");
   TH1F *VertexReso_y       = new TH1F("VertexReso_y","", 100, -0.05, 0.05); VertexReso_y->GetXaxis()->SetTitle("vtx Y_MC - Y_RECO");
   TH1F *VertexReso_x       = new TH1F("VertexReso_x","", 100, -0.05, 0.05); VertexReso_x->GetXaxis()->SetTitle("vtx X_MC - X_RECO");
@@ -171,14 +196,16 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   TH2F *h_DeltaPhi_vs_Reso = new TH2F("h_DeltaPhi_vs_Reso","", 100, -0, 0.2, 100, -8., 8.); h_DeltaPhi_vs_Reso->GetXaxis()->SetTitle("#Delta #Phi"); h_DeltaPhi_vs_Reso->GetYaxis()->SetTitle("#Delta Vtx [cm]");
   TH2F *h_DeltaR_vs_Reso   = new TH2F("h_DeltaR_vs_Reso","", 100, 0., 0.2, 100, -8., 8.); h_DeltaR_vs_Reso->GetXaxis()->SetTitle("#Delta R"); h_DeltaR_vs_Reso->GetYaxis()->SetTitle("#Delta Vtx [cm]");
   TH2F *h_DETA12_vs_Reso   = new TH2F("h_DETA12_vs_Reso","", 100, 0., 5., 100, -8., 8.); h_DETA12_vs_Reso->GetXaxis()->SetTitle("#Delta Eta 1-2"); h_DETA12_vs_Reso->GetYaxis()->SetTitle("#Delta Vtx [cm]");
-
+  TH1F *hDiff_g1g2   = new TH1F("hDiff_g1g2","Diff T G1 G2", 100, -0.02, 0.02); hDiff_g1g2->GetXaxis()->SetTitle("Time [ns]");
+  TH1F *hDiff_g1j1   = new TH1F("hDiff_g1j1","Diff T G1 J1", 100, -0.02., 0.02); hDiff_g1j1->GetXaxis()->SetTitle("Time [ns]");
+  TH1F *hDiff_g1j2   = new TH1F("hDiff_g1j2","Diff T G1 J2", 100, -0.02, 0.02); hDiff_g1j2->GetXaxis()->SetTitle("Time [ns]");
 
   //Detector Smearing
+  float MinSmearing = 0.005;
   int NumSmearing=18;
-  //int NumSmearing=1;
+  for(int resInd=0; resInd<NumSmearing; resInd++ ) cout<<"Time resolutions: "<<MinSmearing + ((MinSmearing*float((resInd)*50.))/100.)<<endl;
   for(int resInd=0; resInd<NumSmearing; resInd++ ){
 
-    float MinSmearing = 0.0019;
     cout<<" Resolution Number "<<resInd<<endl;
     stringstream SmearInd;
     SmearInd << resInd;
@@ -200,7 +227,8 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	if( nentries<500 && iEntry%10==0  ) cout<<" You are at the "<<iEntry<<"/"<<nentries<<" event"<<endl;
 	Tree->GetEntry(iEntry);
 	if( resInd==0 ) ev_flow->Fill(0.);
-	VtxDet_T1-=VtxDet_time; VtxDet_T2-=VtxDet_time;
+	//REMOVE T0!!!
+	VtxDet_T1-=VtxDet_time; VtxDet_T2-=VtxDet_time; VtxDet_VBFT1-=VtxDet_time; VtxDet_VBFT2-=VtxDet_time;
 	if( VtxDet_T1<-900. || VtxDet_PosXtal_X1<-900. || VtxDet_PosXtal_Y1<-900. || VtxDet_PosXtal_Z1<-900. || VtxDet_PtRecoJet_1<-900. || VtxDet_PtMCJet_1<-900. ) continue;
 	if( VtxDet_T2<-900. || VtxDet_PosXtal_X2<-900. || VtxDet_PosXtal_Y2<-900. || VtxDet_PosXtal_Z2<-900. || VtxDet_PtRecoJet_2<-900. || VtxDet_PtMCJet_2<-900. ) continue;
 	if( resInd==0 ) ev_flow->Fill(1.);
@@ -229,6 +257,7 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 	//All or EB or EE
 	if( resInd==0 ){
 	  T1->Fill(VtxDet_T1); T2->Fill(VtxDet_T2);
+	  TVBF1->Fill(VtxDet_VBFT1); TVBF2->Fill(VtxDet_VBFT2);
 	  XtalsEta->Fill( pos1.Eta() ); XtalsEta->Fill( pos2.Eta() ); 
 	  XtalsPhi->Fill( pos1.Phi() ); XtalsPhi->Fill( pos2.Phi() );
 	  isEBEE->Fill(0); 
@@ -269,24 +298,41 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
 
 	//Random Smearing
 	TRandom *ran = new TRandom(0);
-	float effSigma = MinSmearing + ((MinSmearing*float(resInd*100.))/100.);
+	float effSigma = MinSmearing + ((MinSmearing*float(resInd*50.))/100.);
 	float SmearedTime1 = ran->Gaus(VtxDet_T1, effSigma);
 	float SmearedTime2 = ran->Gaus(VtxDet_T2, effSigma);
+	float SmearedTimeVBF1 = ran->Gaus(VtxDet_VBFT1, effSigma);
+	float SmearedTimeVBF2 = ran->Gaus(VtxDet_VBFT2, effSigma);
 	if( resInd==0 ){
 	  SmearedTime1 = VtxDet_T1;
 	  SmearedTime2 = VtxDet_T2;
+	  SmearedTimeVBF1 = VtxDet_VBFT1;
+	  SmearedTimeVBF2 = VtxDet_VBFT2;
 	  effSigma = MinSmearing;
 	}
 	delete ran;
 
-	//Compute Eta_TOF
+	//Compute Time: Time + TOF 
 	float Gtime1 = SmearedTime1 + VtxDet_GT1, Gtime2 = SmearedTime2 + VtxDet_GT2;
-
+	float GtimeVBF1 = SmearedTimeVBF1 + VtxDet_VBFGT1, GtimeVBF2 = SmearedTimeVBF2 + VtxDet_VBFGT2;
+	//Compute Sigma Time
 	double sigma_T1( sqrt(effSigma*effSigma + MinSmearing*MinSmearing) );
 	double sigma_T2( sqrt(effSigma*effSigma + MinSmearing*MinSmearing) );
 
 	//Vertexing
-	vector<float> Results = ComputeVertex( Gtime1, Gtime2, sigma_T1, sigma_T2, pos1, pos2, T0Free, VtxDet_time, vxMC, vyMC);
+	vector<float> Results;
+	if( resInd==0 ){
+	  hDiff_g1g2->Fill(SmearedTime1-SmearedTime2);
+	  if( SmearedTimeVBF1>-400 ) hDiff_g1j1->Fill(SmearedTime1-SmearedTimeVBF1);
+	  if( SmearedTimeVBF2>-400 ) hDiff_g1j2->Fill(SmearedTime1-SmearedTimeVBF2);
+	}
+	/*if( fabs(Gtime1-GtimeVBF1)>0.01 ){*/ GtimeVBF1=-999.; VtxDet_PosVBF_X1=-999.; VtxDet_PosVBF_Y1=-999.; VtxDet_PosVBF_Z1=-999.; //}
+	/*if( fabs(Gtime1-GtimeVBF2)>0.01 ){*/ GtimeVBF2=-999.; VtxDet_PosVBF_X2=-999.; VtxDet_PosVBF_Y2=-999.; VtxDet_PosVBF_Z2=-999.; //}
+	//if( fabs(GtimeVBF1)<0.05 ){ GtimeVBF1=-999.; VtxDet_PosVBF_X1=-999.; VtxDet_PosVBF_Y1=-999.; VtxDet_PosVBF_Z1=-999.; } //Worse should not Use T0
+	//if( fabs(GtimeVBF2)<0.05 ){ GtimeVBF2=-999.; VtxDet_PosVBF_X2=-999.; VtxDet_PosVBF_Y2=-999.; VtxDet_PosVBF_Z2=-999.; }
+	cout<<"COUTCOUT "<<Gtime1<<"  "<<Gtime2<<"  "<<sigma_T1<<"  "<<sigma_T2<<"  "<<pos1.X()<<"  "<<pos2.X()<<"  "<<T0Free<<"  "<<VtxDet_time<<"  "<<vxMC<<"  "<<vyMC<<"  "<<GtimeVBF1<<"  "<<GtimeVBF2<<"  "<<VtxDet_PosVBF_X1<<"  "<<VtxDet_PosVBF_Y1<<"  "<<VtxDet_PosVBF_Z1<<"  "<<VtxDet_PosVBF_X2<<"  "<<VtxDet_PosVBF_Y2<<"  "<<VtxDet_PosVBF_Z2<<endl;
+	vector<float> Results = ComputeVertex( Gtime1, Gtime2, sigma_T1, sigma_T2, pos1, pos2, T0Free, VtxDet_time, vxMC, vyMC, GtimeVBF1, GtimeVBF2, VtxDet_PosVBF_X1, VtxDet_PosVBF_Y1, VtxDet_PosVBF_Z1, VtxDet_PosVBF_X2, VtxDet_PosVBF_Y2, VtxDet_PosVBF_Z2);
+	//vector<float> Results; Results.push_back(0); Results.push_back(0); Results.push_back(0); Results.push_back(0);
 	float Best_Vz = Results[0], Vtx_err = Results[1];
 	float Best_t0 = Results[2], T0_err = Results[3];
 
@@ -354,6 +400,12 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   Hname = OutPutFolder + "/Original_T2.png";
   T2->Draw(); myc1->SaveAs( Hname.Data() );
 
+  Hname = OutPutFolder + "/Original_TVBF1.png";
+  TVBF1->Draw(); myc1->SaveAs( Hname.Data() );
+
+  Hname = OutPutFolder + "/Original_TVBF2.png";
+  TVBF2->Draw(); myc1->SaveAs( Hname.Data() );
+
   Hname = OutPutFolder + "/XtalsEta.png";
   XtalsEta->Draw(); myc1->SaveAs( Hname.Data() );
 
@@ -398,23 +450,27 @@ void VertexDeterminator_minuit( TString NameFile, bool T0Free , int OnlyEB , TSt
   Hname = OutPutFolder + "/DeltaR_vs_Reso.png";
   h_DeltaR_vs_Reso->Draw("colz"); myc1->SaveAs( Hname.Data() );
   Hname = OutPutFolder + "/DeltaEta1_2_vs_Reso.png";
-  h_DETA12_vs_Reso->Draw("colz"); myc1->SaveAs( Hname.Data() );
+  h_DETA12_vs_Reso->Draw("colz"); myc1->SaveAs( Hname.Data() ); gStyle->SetOptStat(111111);
+  Hname = OutPutFolder + "/Diff_g1g2.png";
+  hDiff_g1g2->Draw(); myc1->SaveAs( Hname.Data() );
+  Hname = OutPutFolder + "/Diff_g1j1.png";
+  hDiff_g1j1->Draw(); myc1->SaveAs( Hname.Data() );
+  Hname = OutPutFolder + "/Diff_g1j2.png";
+  hDiff_g1j2->Draw(); myc1->SaveAs( Hname.Data() );  gStyle->SetOptStat(0);
 
   bool XminXmax = false;
   bool XminXmax0 = false;
-  float QuantMin = T0Free ? 15. : 2.5, QuantMax = T0Free ? 85. : 97.5;
+  float QuantMin = T0Free ? 10. : 2.5, QuantMax = T0Free ? 90. : 97.5;
 
   Hname = OutPutFolder + "/Correl_Resol_Vtx.png";
   Correl_Resol_Vtx->Draw("colz"); gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );
-  TH1D *VtxRMS = new TH1D("VtxRMS", "", 100, 0.001, 0.04);
+  outfile->cd(); Correl_Resol_Vtx->Write();
+  TH1D *VtxRMS = new TH1D("VtxRMS", "", 100, 0.001, 0.05);
   int index(0);
   for(int i=0; i<Correl_Resol_Vtx->GetNbinsX(); i++){
-cout<<"AAAA!!1 "<<i<<endl;
     if( Correl_Resol_Vtx->ProjectionY(" ",i+1,i+1)->Integral()>0. ){
-cout<<"AAAA!!2 "<<i<<endl;
 	double quant[2], value[2];
 	TH1D *h1 = Correl_Resol_Vtx->ProjectionY(" ",i+1,i+1);
-	//for(int NN=0; NN<h1->GetNbinsX(); NN++){ if( h1->GetBinContent(NN+1)>1 ) h1->SetBinContent(NN+1, h1->GetBinContent(NN+1) ); }
 	value[0]=(h1->Integral()*QuantMax/100)/h1->Integral();
 	value[1]=(h1->Integral()*QuantMin/100)/h1->Integral();
 	h1->GetQuantiles(2, quant, value);
@@ -466,16 +522,14 @@ cout<<"AAAA!!2 "<<i<<endl;
 	//	m.migrad();
 	//	RooFitResult* res = m.save();
 
-cout<<"AAAA!!3 "<<i<<endl;
 	VtxRMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
 	VtxRMS->SetBinError( i+1, h1->GetRMSError() );
-	stringstream Ind; Ind << i; string Indst = Ind.str();cout<<"AAAAOOOO "<<Indst<<endl; h1->Draw(); Hname = OutPutFolder + "/VTXRMS_" + TString(Indst)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
+	stringstream Ind; Ind << i; string Indst = Ind.str(); h1->Draw(); Hname = OutPutFolder + "/VTXRMS_" + TString(Indst)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 	delete h1;
 	//delete MyRms;
     }
   }
-  //TF1 *Mypol1 = new TF1("Mypol1","[0]+[1]*x",0.0, 0.04);
-  TF1 *Mypol1 = new TF1("Mypol1","[0]*x",0.0, 0.04);
+  TF1 *Mypol1 = new TF1("Mypol1","[0]*x",0.0, 0.05);
   //Mypol1->SetParName(0,"int.");
   Mypol1->SetParName(0,"coeff.");
   VtxRMS->Fit("Mypol1");
@@ -495,7 +549,8 @@ cout<<"AAAA!!3 "<<i<<endl;
 
   Hname = OutPutFolder + "/Correl_Resol_T0.png";
   Correl_Resol_T0->Draw("colz"); gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
-  TH1D *T0RMS = new TH1D("T0RMS", "", 100, 0.001, 0.04);
+  outfile->cd(); Correl_Resol_T0->Write();
+  TH1D *T0RMS = new TH1D("T0RMS", "", 100, 0.001, 0.05);
   for(int i=0; i<Correl_Resol_T0->GetNbinsX(); i++){
     if( Correl_Resol_T0->ProjectionY(" ",i+1,i+1)->Integral()>0. ){
 	double quant[2], value[2];
@@ -525,8 +580,7 @@ cout<<"AAAA!!3 "<<i<<endl;
 	delete h1;
     }
   }
-  //TF1 *Mypol2 = new TF1("Mypol2","[0]+[1]*x",0.0, 0.04);
-  TF1 *Mypol2 = new TF1("Mypol2","[0]*x",0.0, 0.04);
+  TF1 *Mypol2 = new TF1("Mypol2","[0]*x",0.0, 0.05);
   //Mypol2->SetParName(0,"int.");
   Mypol2->SetParName(0,"coeff.");// Mypol1->SetParameter(1, 8.9);
   T0RMS->Fit("Mypol2");
@@ -543,11 +597,13 @@ cout<<"AAAA!!3 "<<i<<endl;
 
   //Deleting Stuffs
   delete myc1;
+  outfile->Write();
+  outfile->Close();
   cout<<"----> END of VertexDeterminator... Thanks for choosing VertexDeterminator_minuit.C!"<<endl;
 }//VertexDeterminator.C
 
-
-vector<float> ComputeVertex( float Gtime1, float Gtime2, float sigma_T1, float sigma_T2, TVector3 posExp1, TVector3 posExp2, bool T0Free, float VtxDet_time, float Vx, float Vy){
+//Par: 0 T1Meas 1 PosX1 2 PosY1 3 PosZ1 4 T1Unc 5 T2Meas 6 PosX2 7 PosY2 8 PosZ2 9 T2Unc 10 Vz[FIND!] 11 T0[FIND] 12 Vx 13 Vy 14 TJet1 15 TJet2 16 Jet1X 17 Jet1Y 18 Jet1Z 19 Jet2X 20 Jet2Y 21 Jet2Y
+vector<float> ComputeVertex( float Gtime1, float Gtime2, float sigma_T1, float sigma_T2, TVector3 posExp1, TVector3 posExp2, bool T0Free, float VtxDet_time, float Vx, float Vy, float TJet1, float TJet2, float Jet_posX1, float Jet_posY1, float Jet_posZ1, float Jet_posX2, float Jet_posY2, float Jet_posZ2){
 
   // initialize minuit
   TMinuit aMinuit(12);
@@ -569,18 +625,28 @@ vector<float> ComputeVertex( float Gtime1, float Gtime2, float sigma_T1, float s
   }
   else {
     aMinuit.mnparm(11, "T0",  VtxDet_time, 0., VtxDet_time, VtxDet_time, ierflg); 
-    aMinuit.FixParameter(11);
   }
   aMinuit.mnparm(12, "Vx",    Vx,          0., Vx, Vx, ierflg);
   aMinuit.mnparm(13, "Vy",    Vy,          0., Vy, Vy, ierflg);
-  aMinuit.FixParameter(0); aMinuit.FixParameter(1); aMinuit.FixParameter(2); aMinuit.FixParameter(3); aMinuit.FixParameter(4); aMinuit.FixParameter(5);
-  aMinuit.FixParameter(6); aMinuit.FixParameter(7); aMinuit.FixParameter(8); aMinuit.FixParameter(9); aMinuit.FixParameter(2); aMinuit.FixParameter(13);
+  aMinuit.mnparm(14, "TJet1", TJet1,      0., TJet1,      TJet1,      ierflg); 
+  aMinuit.mnparm(15, "TJet2", TJet2,      0., TJet2,      TJet2,      ierflg); 
+  aMinuit.mnparm(16, "Jet_posX1", Jet_posX1,      0., Jet_posX1,      Jet_posX1,      ierflg); 
+  aMinuit.mnparm(17, "Jet_posY1", Jet_posY1,      0., Jet_posY1,      Jet_posY1,      ierflg); 
+  aMinuit.mnparm(18, "Jet_posZ1", Jet_posZ1,      0., Jet_posZ1,      Jet_posZ1,      ierflg); 
+  aMinuit.mnparm(19, "Jet_posX2", Jet_posX2,      0., Jet_posX2,      Jet_posX2,      ierflg); 
+  aMinuit.mnparm(20, "Jet_posY2", Jet_posY2,      0., Jet_posY2,      Jet_posY2,      ierflg); 
+  aMinuit.mnparm(21, "Jet_posZ2", Jet_posZ2,      0., Jet_posZ2,      Jet_posZ2,      ierflg); 
+  aMinuit.FixParameter(0);  aMinuit.FixParameter(1);  aMinuit.FixParameter(2);  aMinuit.FixParameter(3);  aMinuit.FixParameter(4);  aMinuit.FixParameter(5);
+  aMinuit.FixParameter(6);  aMinuit.FixParameter(7);  aMinuit.FixParameter(8);  aMinuit.FixParameter(9);  aMinuit.FixParameter(2);  aMinuit.FixParameter(13);
+  aMinuit.FixParameter(14); aMinuit.FixParameter(15); aMinuit.FixParameter(16); aMinuit.FixParameter(17); aMinuit.FixParameter(18); aMinuit.FixParameter(19);
+  aMinuit.FixParameter(20); aMinuit.FixParameter(21);
+  if( !T0Free ) aMinuit.FixParameter(11);
   Double_t arglis[10];
   arglis[0] = 2000000; // Max calls
   arglis[1] = 0.00001; // Tolerance
   aMinuit.SetPrintLevel(-1);
   aMinuit.mnexcm("MIGRAD", arglis, 2, ierflg);
-  aMinuit.mnexcm("MINOS", arglis, 2, ierflg);
+  //aMinuit.mnexcm("MINOS", arglis, 2, ierflg);
   //aMinuit.mnexcm("HESSE", arglis, 2, ierflg);
 
   //Get Param

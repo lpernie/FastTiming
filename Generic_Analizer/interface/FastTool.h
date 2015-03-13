@@ -54,17 +54,96 @@ class FastTool{
     FastTool(){ std::cout<<"Hi, I'm FastTool and I will help you in your Analysis."<<std::endl; }
     ~FastTool(){ std::cout<<"End of FastTool... See you soon."<<std::endl; }
     
-    void Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx );
-    float GiveT0(){   return T0_;   };
-    float GiveVtxX(){ return VtxX_; };
-    float GiveVtxY(){ return VtxY_; };
-    float GiveVtxZ(){ return VtxZ_; };
+    void Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx, float EB_LAYER, float EE_LAYER );
+    float GiveT0(){     return T0_;   };
+    float GiveVtxX(){   return VtxX_; };
+    float GiveVtxY(){   return VtxY_; };
+    float GiveVtxZ(){   return VtxZ_; };
+    float GetEBLayer(){ return EB_LAYER_; };
+    float GetEELayer(){ return EE_LAYER_; };
   private:
+    float EB_LAYER_;
+    float EE_LAYER_;
     float T0_;
     float VtxX_;
     float VtxY_;
     float VtxZ_;
 };
+//[0]T [1]X [2]Y [3]Z
+vector<float> GetTimeFromJet( const reco::PFJet *PFJets, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits, const CaloGeometry* geometry, FastTool *FTool_)
+{
+  vector<float> TXYZ; TXYZ.clear();
+  float finalTime=-999., finalX=-999., finalY=-999., finalZ=-999., minE=0.;
+  std::vector <reco::PFCandidatePtr> PFCand = PFJets->getPFConstituents();
+  for(unsigned int i=0; i<PFCand.size(); i++){
+    PFCandidate MY_cand(PFCand[i]);
+    std::vector<EcalRecHit> V_seeds; V_seeds.clear(); std::vector<reco::PFClusterRef> V_cluster; V_cluster.clear(); vector<GlobalPoint> V_seedPos; V_seedPos.clear();
+    const EcalRecHit* seedHit = 0;
+    GlobalPoint Xtal;
+    double maxClusterEnergy = 0.;
+    for (auto& blockPair : MY_cand.elementsInBlocks()){
+	unsigned int pos = blockPair.second;
+	const reco::PFBlockElement& blockElement = blockPair.first->elements()[pos];
+	{
+	  if (blockElement.type() != 4)
+	    continue;
+	  reco::PFClusterRef cluster = blockElement.clusterRef();
+	  if (cluster.isAvailable())
+	  {
+	    if (cluster->energy() > maxClusterEnergy)
+		maxClusterEnergy = cluster->energy();
+	    DetId seedID = cluster->seed();
+	    if (cluster->layer() == PFLayer::ECAL_BARREL){
+		for (auto& rhEB : *theBarrelEcalRecHits){
+		  if (rhEB.id() == seedID){
+		    seedHit = &rhEB;
+		    EBDetId idEB(rhEB.id());
+		    const CaloCellGeometry* cell=geometry->getGeometry(idEB);
+		    Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( FTool_->GetEBLayer() );
+		  }
+		}
+	    }
+	    else if (cluster->layer() == PFLayer::ECAL_ENDCAP){
+		for (auto& rhEE : *theEndcapEcalRecHits){
+		  if (rhEE.id() == seedID){
+		    seedHit = &rhEE;
+		    EKDetId idEE(rhEE.id());
+		    const CaloCellGeometry* cell=geometry->getGeometry(idEE);
+		    Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( FTool_->GetEELayer() );
+		  }
+		}
+	    }
+	    if(seedHit){ V_seeds.push_back( *seedHit ); V_cluster.push_back( cluster ); V_seedPos.push_back( Xtal ); }
+	  }
+	}
+    }//All Blocks
+    //Now Select the bigger cluster into the SC
+    float BestTime = -1, BestEne = -1, Emin=0;
+    float BestX = -999., BestY = -999., BestZ = -999.;
+    for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
+	if( V_cluster[nClu]->energy() > Emin ){
+	  Emin = V_cluster[nClu]->energy(); //Take seed from most energetic cluster
+	  BestTime = V_seeds[nClu].time(); BestEne = V_seeds[nClu].energy();
+	  BestX = V_seedPos[nClu].x(); BestY = V_seedPos[nClu].y(); BestZ = V_seedPos[nClu].z();
+	}
+    }
+    //cout<<" I took: "<<BestTime<<" clu size: "<<int(V_cluster.size())<<endl;
+    if( BestTime==-1 ) continue;
+    if(BestEne>minE){
+	//cout<<"  And to PF I giveit !: "<<BestTime<<endl;
+	minE = BestEne;
+	finalTime = BestTime;
+	finalX = BestX;
+	finalY = BestY;
+	finalZ = BestZ;
+    }
+  }//End PFCand Loop
+  //cout<<"   final time "<<finalTime<<endl;
+ 
+  TXYZ.push_back(finalTime); TXYZ.push_back(finalX); TXYZ.push_back(finalY); TXYZ.push_back(finalZ);
+  return TXYZ;
+}
+
 
 float GetTimeFromJet( const reco::PFJet *PFJets, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
 {
@@ -125,6 +204,43 @@ float GetTimeFromJet( const reco::PFJet *PFJets, edm::Handle<edm::SortedCollecti
   //cout<<"   final time "<<finalTime<<endl;
   return finalTime;
 }
+
+vector<float> GetTimeFromGamma( const reco::Photon* photon, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits, const CaloGeometry* geometry, FastTool *FTool_ )
+{
+  vector<float> T_XYZ; T_XYZ.clear();
+  float posX=-99., posY=-99., posZ=-99.;
+  float ThisTime=-99.;
+  const EcalRecHit* seedHit = 0;
+  DetId seedId = photon->superCluster()->seed()->seed();
+  GlobalPoint Xtal;
+  if( photon->isEB() ){
+    for (auto& rhEB : *theBarrelEcalRecHits){
+	if (rhEB.id() == seedId ){
+	  seedHit = &rhEB;
+	  EBDetId idEB(rhEB.id());
+	  const CaloCellGeometry* cell=geometry->getGeometry(idEB);
+	  Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( FTool_->GetEBLayer() );
+	}
+    }
+  }
+  else{
+    for (auto& rhEE : *theEndcapEcalRecHits){
+	if (rhEE.id() == seedId ){
+	  seedHit = &rhEE;
+	  EKDetId idEE(rhEE.id());
+	  const CaloCellGeometry* cell=geometry->getGeometry(idEE);
+	  Xtal = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( FTool_->GetEELayer() );
+	}
+    }
+  }
+  if(seedHit){
+    ThisTime = seedHit->time();
+    posX = Xtal.x(); posY = Xtal.y(); posZ = Xtal.z();
+  }
+  T_XYZ.push_back(ThisTime); T_XYZ.push_back(posX); T_XYZ.push_back(posY); T_XYZ.push_back(posZ);
+  return T_XYZ;
+}
+
 
 float GetTimeFromGamma( const reco::Photon* photon, edm::Handle<edm::SortedCollection<EcalRecHit> >& theBarrelEcalRecHits, edm::Handle<edm::SortedCollection<EcalRecHit> >& theEndcapEcalRecHits  )
 {

@@ -7,7 +7,7 @@
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "FastTiming/Generic_Analizer/interface/FastTool.h"
 
-void FastTool::Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx  ){
+void FastTool::Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx, float EB_LAYER, float EE_LAYER  ){
 
   edm::SimVertexContainer::const_iterator simVtxFirst = SimVtx->begin();
   GlobalPoint Vtx_sim( simVtxFirst->position().x(), simVtxFirst->position().y(), simVtxFirst->position().z() );
@@ -17,4 +17,7 @@ void FastTool::Inizialization( edm::Handle<edm::SimVertexContainer> SimVtx  ){
   VtxX_ = Vtx_sim.x();
   VtxY_ = Vtx_sim.y();
   VtxZ_ = Vtx_sim.z(); 
+  
+  EB_LAYER_ = EB_LAYER;
+  EE_LAYER_ = EE_LAYER;
 }

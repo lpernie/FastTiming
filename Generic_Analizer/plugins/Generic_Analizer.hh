@@ -95,9 +95,13 @@ class Generic_Analizer : public edm::EDAnalyzer {
     bool DoSumEt_;
     bool DoMass_;
     bool isHgg_;
+    double SubT0TOF_;
     string OutName_;
     TFile*outfile;
     TH1F *h_EventFlow;
+    TH1F *h_T0;
+    TH1F *h_BestTime_Fir_RemovalSumEt_zoom;
+    TH1F *h_BestTime_Fir_RemovalSumEt;
     TH1F *h_SumEt;
     TH1F *h_SumEt_cut;
     TH1F *h_SumEt_15cut;
@@ -233,9 +237,11 @@ class Generic_Analizer : public edm::EDAnalyzer {
     Float_t VtxDet_T1;          
     Float_t VtxDet_VBFT1;          
     Float_t VtxDet_GT1;          
+    Float_t VtxDet_VBFGT1;          
     Float_t VtxDet_T2;          
     Float_t VtxDet_VBFT2;          
     Float_t VtxDet_GT2;          
+    Float_t VtxDet_VBFGT2;          
     Float_t VtxDet_time;        
     Float_t VtxDet_PosXtal_X1;  
     Float_t VtxDet_PosXtal_Y1;  

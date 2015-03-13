@@ -99,6 +99,7 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
   DoSumEt_      = iConfig.getUntrackedParameter<bool>("DoSumEt");
   DoMass_       = iConfig.getUntrackedParameter<bool>("DoMass");
   isHgg_        = iConfig.getUntrackedParameter<bool>("isHgg");
+  SubT0TOF_     = iConfig.getUntrackedParameter<double>("SubT0TOF");
   OutName_      = iConfig.getUntrackedParameter<string>("OutName");
   //Selection
   MinPt_Gen     = iConfig.getUntrackedParameter<double>("MinPt_Gen",30);
@@ -110,16 +111,20 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
 #ifdef DEBUG
   debug = true;
 #endif
+    cout<<"Time: you choose a SUBTRACTION level "<<SubT0TOF_<<" Where 0 is no Subtraction (your time is perfect), 1 need to sub T0, 2 need to sub TOF, 3 need to sub. T0 and TOF, 4 need to ad back TOF(0,0,0) and sub T0 and TOF."<<endl;
     if(debug) cout<<"DEBUG mode selected."<<endl;
     outfile = new TFile(OutName_.c_str(),"RECREATE");
     outfile->cd();
     h_EventFlow          = new TH1F("h_EventFlow", "", 5, -0.5, 4.5);
     h_EventFlow->GetXaxis()->SetBinLabel(1,"Events"); h_EventFlow->GetXaxis()->SetBinLabel(2,"MC Jets"); h_EventFlow->GetXaxis()->SetBinLabel(3,"RECO Jets"); h_EventFlow->GetXaxis()->SetBinLabel(4,"MC Phot"); h_EventFlow->GetXaxis()->SetBinLabel(5,"RECO Phot");
+    h_T0                 = new TH1F("h_T0", "", 100, -0.5, 0.5);
     h_SumEt_cut          = new TH1F("h_SumEt_cut", "", 1000, 0., 2000.);
     h_SumEt_15cut        = new TH1F("h_SumEt_15cut", "", 1000, 0., 2000.);
     h_SumEt_30cut        = new TH1F("h_SumEt_30cut", "", 1000, 0., 2000.);
     h_SumEt_50cut        = new TH1F("h_SumEt_50cut", "", 1000, 0., 2000.);
     h_SumEt_500cut       = new TH1F("h_SumEt_500cut", "", 1000, 0., 2000.);
+    h_BestTime_Fir_RemovalSumEt_zoom = new TH1F("h_BestTime_Fir_RemovalSumEt_zoom","", 100, -0.02, 0.2); h_BestTime_Fir_RemovalSumEt_zoom->GetXaxis()->SetTitle("Time [ns]"); 
+    h_BestTime_Fir_RemovalSumEt      = new TH1F("h_BestTime_Fir_RemovalSumEt","", 100, -0.3, 0.3); h_BestTime_Fir_RemovalSumEt->GetXaxis()->SetTitle("Time [ns]"); 
     h_SumEt              = new TH1F("h_SumEt", "", 1000, 0., 2000.);
     h_TOT_SumEt_cut      = new TH1F("h_TOT_SumEt_cut", "", 1000, 0., 2000.);
     h_TOT_SumEt_15cut    = new TH1F("h_TOT_SumEt_15cut", "", 1000, 0., 2000.);
@@ -252,6 +257,7 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
       Tree_Vtx->Branch("VtxDet_T1",&VtxDet_T1,"VtxDet_T1/F");
       Tree_Vtx->Branch("VtxDet_VBFT1",&VtxDet_VBFT1,"VtxDet_VBFT1/F");
       Tree_Vtx->Branch("VtxDet_GT1",&VtxDet_GT1,"VtxDet_GT1/F");
+      Tree_Vtx->Branch("VtxDet_VBFGT1",&VtxDet_VBFGT1,"VtxDet_VBFGT1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_X1",&VtxDet_PosXtal_X1,"VtxDet_PosXtal_X1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Y1",&VtxDet_PosXtal_Y1,"VtxDet_PosXtal_Y1/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Z1",&VtxDet_PosXtal_Z1,"VtxDet_PosXtal_Z1/F");
@@ -267,6 +273,7 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
       Tree_Vtx->Branch("VtxDet_T2",&VtxDet_T2,"VtxDet_T2/F");
       Tree_Vtx->Branch("VtxDet_VBFT2",&VtxDet_VBFT2,"VtxDet_VBFT2/F");
       Tree_Vtx->Branch("VtxDet_GT2",&VtxDet_GT2,"VtxDet_GT2/F");
+      Tree_Vtx->Branch("VtxDet_VBFGT2",&VtxDet_VBFGT2,"VtxDet_VBFGT2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_X2",&VtxDet_PosXtal_X2,"VtxDet_PosXtal_X2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Y2",&VtxDet_PosXtal_Y2,"VtxDet_PosXtal_Y2/F");
       Tree_Vtx->Branch("VtxDet_PosXtal_Z2",&VtxDet_PosXtal_Z2,"VtxDet_PosXtal_Z2/F");
@@ -378,9 +385,10 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   if ( ! SimVtx.isValid() ) {
     edm::LogWarning("SimVtxSummary") << "SimVtx not found";
   }
-  FTool_->Inizialization( SimVtx );
+  FTool_->Inizialization( SimVtx, EB_LAYER_, EE_LAYER_ );
   GlobalPoint Vtx_sim( FTool_->GiveVtxX(), FTool_->GiveVtxY(), FTool_->GiveVtxZ() );
   float T0_Vtx_MC = FTool_->GiveT0();
+  h_T0->Fill( T0_Vtx_MC );
 
   //----------------------------------------Let's START--------------------------------------------------
   h_EventFlow->Fill(0);
@@ -443,7 +451,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Plot with good and bad jets
   for(int i=0; i<int(GoodJetList.size()); i++){
-    float time = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    vector<float> TimeXYZ = GetTimeFromJet( GoodJetList[i], recHitsEB, recHitsEE, geometry_, FTool_ );
+    float time = TimeXYZ[0];
+    GlobalPoint thisPos( TimeXYZ[1], TimeXYZ[2], TimeXYZ[3] );
+    GlobalPoint Zero( 0., 0., 0. );
+    if( SubT0TOF_==1 )  time-=T0_Vtx_MC; 
+    if( SubT0TOF_==2 ){ time-=computeTOF( Vtx_sim,thisPos ); }
+    if( SubT0TOF_==3 ){ time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim,thisPos ); }
+    if( SubT0TOF_==4 ){ time+=computeTOF( Zero, thisPos ); time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
     h_GoodJet_t->Fill( time );
     if( fabs(GoodJetList[i]->p4().eta())<1.47 ){ h_GoodJet_tEB->Fill( time ); h_GoodJet_tEB2->Fill( time );}
     if( fabs(GoodJetList[i]->p4().eta())>1.50 ){ h_GoodJet_tEE->Fill( time ); h_GoodJet_tEE2->Fill( time );}
@@ -454,7 +469,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     if( time>-200 && time < 200. ) h_EffEta_jet3->Fill( fabs(GoodJetList[i]->p4().eta()) );
   }
   for(int i=0; i<int(BadJetList.size()); i++){
-    float time = GetTimeFromJet( BadJetList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    vector<float> TimeXYZ = GetTimeFromJet( BadJetList[i], recHitsEB, recHitsEE, geometry_, FTool_ );
+    float time = TimeXYZ[0];
+    GlobalPoint thisPos( TimeXYZ[1], TimeXYZ[2], TimeXYZ[3] );
+    GlobalPoint Zero( 0., 0., 0. );
+    if( SubT0TOF_==1 )  time-=T0_Vtx_MC;
+    if( SubT0TOF_==2 ){ time-=computeTOF( Vtx_sim,thisPos ); }
+    if( SubT0TOF_==3 ){ time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim,thisPos ); }
+    if( SubT0TOF_==4 ){ time+=computeTOF( Zero, thisPos ); time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
     h_BadJet_t->Fill( time );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_jet1->Fill( fabs(BadJetList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_jet2->Fill( fabs(BadJetList[i]->p4().eta()) );
@@ -508,8 +530,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   }
   //Plots with Good and Bad photons
   for(int i=0; i<int(GoodPhotList.size()); i++){
-    //float time = GetTimeFromGamma( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
-    float time = GetTimeFromJet( GoodPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    vector<float> TimeXYZ = GetTimeFromJet( GoodPhotList[i], recHitsEB, recHitsEE, geometry_, FTool_ );
+    float time = TimeXYZ[0];
+    GlobalPoint thisPos( TimeXYZ[1], TimeXYZ[2], TimeXYZ[3] );
+    GlobalPoint Zero( 0.,0.,0. );
+    if( SubT0TOF_==1 )  time-=T0_Vtx_MC;
+    if( SubT0TOF_==2 ){ time-=computeTOF( Vtx_sim, thisPos ); }
+    if( SubT0TOF_==3 ){ time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
+    if( SubT0TOF_==4 ){ time+=computeTOF( Zero, thisPos ); time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
     h_GoodGamma_t->Fill( time );
     if( fabs(GoodPhotList[i]->p4().eta())<1.47 ){ h_GoodGamma_tEB->Fill( time ); h_GoodGamma_tEB2->Fill( time );}
     if( fabs(GoodPhotList[i]->p4().eta())>1.50 ){ h_GoodGamma_tEE->Fill( time ); h_GoodGamma_tEE2->Fill( time );}
@@ -519,7 +547,14 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     if( time>-200 && time < 200. ) h_EffEta_phot3->Fill( fabs(GoodPhotList[i]->p4().eta()) );
   }
   for(int i=0; i<int(BadPhotList.size()); i++){
-    float time = GetTimeFromGamma( BadPhotList[i], recHitsEB, recHitsEE )-T0_Vtx_MC;
+    vector<float> TimeXYZ = GetTimeFromGamma( BadPhotList[i], recHitsEB, recHitsEE, geometry_, FTool_ );
+    float time = TimeXYZ[0];
+    GlobalPoint thisPos( TimeXYZ[1], TimeXYZ[2], TimeXYZ[3] );
+    GlobalPoint Zero( 0.,0.,0. );
+    if( SubT0TOF_==1 )  time-=T0_Vtx_MC;
+    if( SubT0TOF_==2 ){ time-=computeTOF( Vtx_sim, thisPos ); }
+    if( SubT0TOF_==3 ){ time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
+    if( SubT0TOF_==4 ){ time+=computeTOF( Zero, thisPos ); time-=T0_Vtx_MC; time-=computeTOF( Vtx_sim, thisPos ); }
     h_BadGamma_t->Fill( time );
     if( time>-0.5 && time < 0.5 )  h_NEffEta_phot1->Fill( fabs(BadPhotList[i]->p4().eta()) );
     if( time> 0.0 && time < 0.1 )  h_NEffEta_phot2->Fill( fabs(BadPhotList[i]->p4().eta()) );
@@ -585,10 +620,11 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     vector<reco::PFClusterRef> ClusetAlreadyUsed; ClusetAlreadyUsed.clear();
     for (auto& pfCand : *PFCol)
     {
-	std::vector<EcalRecHit> V_seeds; V_seeds.clear(); std::vector<reco::PFClusterRef> V_cluster; V_cluster.clear();
+	std::vector<EcalRecHit> V_seeds; V_seeds.clear(); std::vector<reco::PFClusterRef> V_cluster; V_cluster.clear(); std::vector<GlobalPoint> V_seedsPos; V_seedsPos.clear();
 	if( pfCand.particleId() != reco::PFCandidate::gamma ) continue; 
 	if(blabla) cout<<"--START PFCAND: "<<endl;
 	const EcalRecHit* seedHit = 0;
+	GlobalPoint seedHitPos;
 	float SumEt_pf = 0, SumEt_cutted_pf = 0, SumEt_15cutted_pf =0., SumEt_30cutted_pf =0., SumEt_50cutted_pf =0., SumEt_500cutted_pf =0.;
 	TLorentzVector TotSum;
 	TotSum.SetPtEtaPhiE( pfCand.energy()/cosh( pfCand.eta() ), pfCand.eta(), pfCand.phi(), pfCand.energy() );
@@ -623,7 +659,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 		  if(blabla) cout<<"  -> PFLayer::ECAL_BARREL: "<<cluster->eta()<<" "<<cluster->phi()<<" -> "<<TSum.Et()<<" -> "<<SumEt_cutted_pf<<" E "<<cluster->energy()<<endl;
 		  for (auto& rhEB : *recHitsEB)
 		  {
-		    if (rhEB.id() == seedID) seedHit = &rhEB;
+		    if (rhEB.id() == seedID){
+			seedHit = &rhEB;
+			EBDetId idEB(rhEB.id());
+			const CaloCellGeometry* cell=geometry_->getGeometry(idEB);
+			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_ );
+		    }
 		  }
 		}
 		else if (cluster->layer() == PFLayer::ECAL_ENDCAP)
@@ -639,10 +680,16 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 		  if(blabla) cout<<"  -> PFLayer::ECAL_ENDCAP: "<<cluster->eta()<<" "<<cluster->phi()<<" -> "<<TSum.Et()<<" -> "<<SumEt_cutted_pf<<" E "<<cluster->energy()<<endl;
 		  for (auto& rhEE : *recHitsEE)
 		  {
-		    if (rhEE.id() == seedID) seedHit = &rhEE;
+		    if (rhEE.id() == seedID)
+		    {
+			seedHit = &rhEE;
+			EKDetId idEE(rhEE.id());
+			const CaloCellGeometry* cell=geometry_->getGeometry(idEE);
+			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
+		    }
 		  } 
 		}
-		if(seedHit){ V_seeds.push_back( *seedHit ); V_cluster.push_back( cluster ); if(blabla) cout<<"   -> ADDING one Cluster "<<endl; }
+		if(seedHit){ V_seeds.push_back( *seedHit ); V_cluster.push_back( cluster ); V_seedsPos.push_back( seedHitPos ); if(blabla) cout<<"   -> ADDING one Cluster "<<endl; }
 	    }
 	  }
 	}//All Blocks
@@ -653,11 +700,20 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	for( int nClu=0; nClu<int(V_cluster.size()); nClu++ ){
 	  if( V_cluster[nClu]->energy() > Emin ){
 	    Emin = V_cluster[nClu]->energy();
-	    BestTime = V_seeds[nClu].time(); BestTime-=T0_Vtx_MC; BestEne = V_seeds[nClu].energy();
+	    BestTime = V_seeds[nClu].time();
+	    if( SubT0TOF_== 1 ) BestTime-=T0_Vtx_MC;
+	    GlobalPoint thisPos( V_seedsPos[nClu].x(), V_seedsPos[nClu].y(), V_seedsPos[nClu].z() );
+	    GlobalPoint Zero( 0.,0.,0. );
+	    if( SubT0TOF_== 2 ){ BestTime-=computeTOF( Vtx_sim, thisPos ); }
+	    if( SubT0TOF_== 3 ){ BestTime-=T0_Vtx_MC; BestTime-=computeTOF( Vtx_sim, thisPos ); }
+	    if( SubT0TOF_== 4 ){ BestTime+=computeTOF( Zero, thisPos ); BestTime-=T0_Vtx_MC; BestTime-=computeTOF( Vtx_sim, thisPos ); }
+	    BestEne = V_seeds[nClu].energy();
 	    ClustTL.SetPtEtaPhiE( V_cluster[nClu]->energy()/cosh(V_cluster[nClu]->eta()) , V_cluster[nClu]->eta(), V_cluster[nClu]->phi(), V_cluster[nClu]->energy() );
 	  }
 	}
 	//If there is a Seed
+	h_BestTime_Fir_RemovalSumEt->Fill(BestTime);
+	h_BestTime_Fir_RemovalSumEt_zoom->Fill(BestTime);
 	if( BestTime!=-1 ){
 	  if(blabla) cout<<" -> Trying to remove Time"<<endl;
 	  if( (BestTime<-0.01 || BestTime>0.12) ){
@@ -916,19 +972,26 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	  vector<float> Seed_info2 = fabs(Pfgamma2_re.p4().eta())<1.5 ? GetSeedFromSC( true, Pfgamma2_re, recHitsEB, recHitsEE, false, true ) : GetSeedFromSC( false, Pfgamma2_re, recHitsEB, recHitsEE, false, true ); //Seed_PtEtaPhiTime_CluPeEtaPhiE (def. -999.)
 	  TLorentzVector Seed1_tl; Seed1_tl.SetPtEtaPhiM( Seed_info1[0], Seed_info1[1], Seed_info1[2], 0. );
 	  TLorentzVector Seed2_tl; Seed2_tl.SetPtEtaPhiM( Seed_info2[0], Seed_info2[1], Seed_info2[2], 0. );
-	  //TLorentzVector SeedVBF1_tl; SeedVBF1_tl.SetPtEtaPhiM( foundVBF1 ? VBF1_re->p4().pt() : -999., foundVBF1 ? VBF1_re->p4().eta() : -999., foundVBF1 ? VBF1_re->p4().phi() : -999., 0. );
-	  //TLorentzVector SeedVBF2_tl; SeedVBF2_tl.SetPtEtaPhiM( foundVBF2 ? VBF2_re->p4().pt() : -999., foundVBF2 ? VBF2_re->p4().eta() : -999., foundVBF2 ? VBF2_re->p4().phi() : -999., 0. );
 	  if( Seed_info1[3]!=-999 && Seed_info2[3]!=-999 ){
+	    vector<float> null; null.push_back(-999.); null.push_back(-999.); null.push_back(-999.);
+	    vector<float> VBF1_info = foundVBF1 ? GetTimeFromJet( VBF1_re, recHitsEB, recHitsEE, geometry_, FTool_ ) : null;
+	    vector<float> VBF2_info = foundVBF2 ? GetTimeFromJet( VBF2_re, recHitsEB, recHitsEE, geometry_, FTool_ ) : null;
 	    GlobalPoint PosTot(  Seed1_tl.X()-Vtx_sim.x(),  Seed1_tl.Y()-Vtx_sim.y() ,  Seed1_tl.Z()-Vtx_sim.z() );
-	    float tof1 = T0_Vtx_MC +  sqrt( pow(PosTot.x(),2) + pow(PosTot.y(),2) + pow(PosTot.z(),2) )/(LIGHT_SPEED);
+	    float tof1    = T0_Vtx_MC +  sqrt( pow(PosTot.x(),2) + pow(PosTot.y(),2) + pow(PosTot.z(),2) )/(LIGHT_SPEED);
+	    //float tofVBF1 = T0_Vtx_MC +  sqrt( pow(foundVBF1 ? VBF1_re->p4().X() : -999.,2) + pow(foundVBF1 ? VBF1_re->p4().Y() : -999.,2) + pow(foundVBF1 ? VBF1_re->p4().Z() : -999.,2) )/(LIGHT_SPEED);
+	    float tofVBF1 = foundVBF1 ? (T0_Vtx_MC +  sqrt( pow( VBF1_info[1],2) + pow( VBF1_info[2],2) + pow( VBF1_info[3],2) )/(LIGHT_SPEED)) : -999.; 
 	    GlobalPoint PosTot2(  Seed2_tl.X()-Vtx_sim.x(),  Seed2_tl.Y()-Vtx_sim.y() ,  Seed2_tl.Z()-Vtx_sim.z() );
-	    float tof2 = T0_Vtx_MC +  sqrt( pow(PosTot2.x(),2) + pow(PosTot2.y(),2) + pow(PosTot2.z(),2) )/(LIGHT_SPEED);
-	    VtxDet_VBFT1       = foundVBF1 ? GetTimeFromJet( VBF1_re, recHitsEB, recHitsEE ) : -999.; 
-	    VtxDet_VBFT2       = foundVBF2 ? GetTimeFromJet( VBF2_re, recHitsEB, recHitsEE ) : -999.;
+	    float tof2    = T0_Vtx_MC +  sqrt( pow(PosTot2.x(),2) + pow(PosTot2.y(),2) + pow(PosTot2.z(),2) )/(LIGHT_SPEED);
+	    //float tofVBF2 = T0_Vtx_MC +  sqrt( pow(foundVBF2 ? VBF2_re->p4().X() : -999.,2) + pow(foundVBF2 ? VBF2_re->p4().Y() : -999.,2) + pow(foundVBF2 ? VBF2_re->p4().Z() : -999.,2) )/(LIGHT_SPEED);
+	    float tofVBF2 = foundVBF2 ? (T0_Vtx_MC +  sqrt( pow( VBF2_info[1],2) + pow( VBF2_info[2],2) + pow( VBF2_info[3],2) )/(LIGHT_SPEED)) : -999.;
+	    VtxDet_VBFT1       = foundVBF1 ? VBF1_info[0] : -999.; 
+	    VtxDet_VBFT2       = foundVBF2 ? VBF2_info[0] : -999.;
 	    VtxDet_T1          = Seed_info1[3];
 	    VtxDet_T2          = Seed_info2[3];
 	    VtxDet_GT1         = tof1;
 	    VtxDet_GT2         = tof2;
+	    VtxDet_VBFGT1      = foundVBF1 ? tofVBF1 : -999.;
+	    VtxDet_VBFGT2      = foundVBF1 ? tofVBF2 : -999.;
 	    VtxDet_time        = T0_Vtx_MC;
 	    VtxDet_PosXtal_X1  = Seed1_tl.X();
 	    VtxDet_PosXtal_Y1  = Seed1_tl.Y();
@@ -936,12 +999,12 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 	    VtxDet_PosXtal_X2  = Seed2_tl.X();
 	    VtxDet_PosXtal_Y2  = Seed2_tl.Y();
 	    VtxDet_PosXtal_Z2  = Seed2_tl.Z();
-	    VtxDet_PosVBF_X1   = foundVBF1 ? VBF1_re->p4().X() : -999.;
-	    VtxDet_PosVBF_Y1   = foundVBF1 ? VBF1_re->p4().Y() : -999.;
-	    VtxDet_PosVBF_Z1   = foundVBF1 ? VBF1_re->p4().Z() : -999.;
-	    VtxDet_PosVBF_X2   = foundVBF2 ? VBF2_re->p4().X() : -999.;
-	    VtxDet_PosVBF_Y2   = foundVBF2 ? VBF2_re->p4().Y() : -999.;
-	    VtxDet_PosVBF_Z2   = foundVBF2 ? VBF2_re->p4().Z() : -999.;
+	    VtxDet_PosVBF_X1   = foundVBF1 ? VBF1_info[1] : -999.;
+	    VtxDet_PosVBF_Y1   = foundVBF1 ? VBF1_info[2] : -999.;
+	    VtxDet_PosVBF_Z1   = foundVBF1 ? VBF1_info[3] : -999.;
+	    VtxDet_PosVBF_X2   = foundVBF2 ? VBF2_info[1] : -999.;
+	    VtxDet_PosVBF_Y2   = foundVBF2 ? VBF2_info[2] : -999.;
+	    VtxDet_PosVBF_Z2   = foundVBF2 ? VBF2_info[3] : -999.;
 	    VtxDet_PosXtal_MCX1= Gamma1.X();
 	    VtxDet_PosXtal_MCY1= Gamma1.Y();
 	    VtxDet_PosXtal_MCZ1= Gamma1.Z();
@@ -1354,6 +1417,9 @@ void Generic_Analizer::beginJob() {
 void Generic_Analizer::endJob() {
   outfile->cd();
   h_EventFlow->Write();
+  h_T0->Write();
+  h_BestTime_Fir_RemovalSumEt_zoom->Write();
+  h_BestTime_Fir_RemovalSumEt->Write();
   h_SumEt->Write();
   h_SumEt_cut->Write();
   h_SumEt_15cut->Write();
