@@ -90,7 +90,7 @@ float Makemax( float a, float b);
 // OutPutFolder = Name of the output folder
 //.x VertexDeterminator_minuit.C+("../GenericAnalyzer_Higgs_140.root", false, 0, "VTX_Output_T0FIX_EBEE_140PU", "std") 
 //void VertexDeterminator_minuit( TString NameFile, bool T0Free = true, int OnlyEB = 0, TString OutPutFolder = "VTX_Output", TString sele = "std","0" )
-void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool T0Free=true , int OnlyEB=0 , TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF", TString sele = "std" ){
+void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU_OfficialProduction.root", bool T0Free=false , int OnlyEB=0 , TString OutPutFolder="VTX_Output_EBEE_T0Fix_NOVBF_Offic", TString sele = "std" ){
 
   //Initial Stuffs
   if(T0Free) cout<<"----> START VertexDeterminator. T0 is Free"<<endl;
@@ -252,7 +252,7 @@ void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool 
 	double deltaR = std::sqrt(deltaEta*deltaEta+deltaPhi*deltaPhi);
 	if( resInd==0 ) hdr->Fill(deltaR);
 	if( resInd==0 ) hdeta->Fill( fabs(deltaEta) );
-	if( fabs(deltaEta) < (OnlyEB==2 ? 1.6 : 0.6) ) continue;
+	if( fabs(deltaEta) < (OnlyEB==2 ? 1.6 : 0.8) ) continue;
 	if( resInd==0 ) ev_flow->Fill(4.);
 	//All or EB or EE
 	if( resInd==0 ){
@@ -326,11 +326,8 @@ void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool 
 	  if( SmearedTimeVBF1>-400 ) hDiff_g1j1->Fill(SmearedTime1-SmearedTimeVBF1);
 	  if( SmearedTimeVBF2>-400 ) hDiff_g1j2->Fill(SmearedTime1-SmearedTimeVBF2);
 	}
-	/*if( fabs(Gtime1-GtimeVBF1)>0.01 ){*/ GtimeVBF1=-999.; VtxDet_PosVBF_X1=-999.; VtxDet_PosVBF_Y1=-999.; VtxDet_PosVBF_Z1=-999.; //}
-	/*if( fabs(Gtime1-GtimeVBF2)>0.01 ){*/ GtimeVBF2=-999.; VtxDet_PosVBF_X2=-999.; VtxDet_PosVBF_Y2=-999.; VtxDet_PosVBF_Z2=-999.; //}
-	//if( fabs(GtimeVBF1)<0.05 ){ GtimeVBF1=-999.; VtxDet_PosVBF_X1=-999.; VtxDet_PosVBF_Y1=-999.; VtxDet_PosVBF_Z1=-999.; } //Worse should not Use T0
-	//if( fabs(GtimeVBF2)<0.05 ){ GtimeVBF2=-999.; VtxDet_PosVBF_X2=-999.; VtxDet_PosVBF_Y2=-999.; VtxDet_PosVBF_Z2=-999.; }
-	cout<<"COUTCOUT "<<Gtime1<<"  "<<Gtime2<<"  "<<sigma_T1<<"  "<<sigma_T2<<"  "<<pos1.X()<<"  "<<pos2.X()<<"  "<<T0Free<<"  "<<VtxDet_time<<"  "<<vxMC<<"  "<<vyMC<<"  "<<GtimeVBF1<<"  "<<GtimeVBF2<<"  "<<VtxDet_PosVBF_X1<<"  "<<VtxDet_PosVBF_Y1<<"  "<<VtxDet_PosVBF_Z1<<"  "<<VtxDet_PosVBF_X2<<"  "<<VtxDet_PosVBF_Y2<<"  "<<VtxDet_PosVBF_Z2<<endl;
+	/*if( fabs(Gtime1-GtimeVBF1)>0.5 ){ */GtimeVBF1=-999.; VtxDet_PosVBF_X1=-999.; VtxDet_PosVBF_Y1=-999.; VtxDet_PosVBF_Z1=-999.; //}
+	/*if( fabs(Gtime1-GtimeVBF2)>0.5 ){ */GtimeVBF2=-999.; VtxDet_PosVBF_X2=-999.; VtxDet_PosVBF_Y2=-999.; VtxDet_PosVBF_Z2=-999.; //}
 	vector<float> Results = ComputeVertex( Gtime1, Gtime2, sigma_T1, sigma_T2, pos1, pos2, T0Free, VtxDet_time, vxMC, vyMC, GtimeVBF1, GtimeVBF2, VtxDet_PosVBF_X1, VtxDet_PosVBF_Y1, VtxDet_PosVBF_Z1, VtxDet_PosVBF_X2, VtxDet_PosVBF_Y2, VtxDet_PosVBF_Z2);
 	//vector<float> Results; Results.push_back(0); Results.push_back(0); Results.push_back(0); Results.push_back(0);
 	float Best_Vz = Results[0], Vtx_err = Results[1];
@@ -540,7 +537,7 @@ void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool 
   float xmin(0.45), yhi(0.80), ypass(0.05);
   sprintf(line,"Int: %.2f [cm]", Mypol1->GetParameter(0) );
   lat.DrawLatex(xmin,yhi-ypass, line);
-  sprintf(line,"Coeff: %.2f", Mypol1->GetParameter(1) );
+  sprintf(line,"Coeff: %.4f", Mypol1->GetParameter(1) );
   lat.DrawLatex(xmin,yhi-2.*ypass, line );
   Hname = OutPutFolder + "/Correl_Resol_Vtx_prfRMS.png";
   gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );
@@ -590,7 +587,7 @@ void VertexDeterminator_minuit( TString NameFile="../../../Hgg_noPU.root", bool 
   lat2.SetNDC(); lat2.SetTextSize(0.040); lat2.SetTextColor(1);
   sprintf(line2,"Int: %.2f [ns]", Mypol2->GetParameter(0) );
   lat2.DrawLatex(xmin,yhi-ypass, line2);
-  sprintf(line2,"Coeff: %.2f", Mypol2->GetParameter(1) );
+  sprintf(line2,"Coeff: %.4f", Mypol2->GetParameter(1) );
   lat2.DrawLatex(xmin,yhi-2.*ypass, line2 );
   Hname = OutPutFolder + "/Correl_Resol_T0_prfRMS.png";
   gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );

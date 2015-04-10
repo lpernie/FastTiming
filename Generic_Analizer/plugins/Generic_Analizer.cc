@@ -88,8 +88,8 @@ Generic_Analizer::Generic_Analizer(const edm::ParameterSet& iConfig) {
   JetCHS_       = iConfig.getUntrackedParameter<edm::InputTag>("JetCHS");
   RecoVtx_      = iConfig.getUntrackedParameter<edm::InputTag>("RecoVtx");
   ak5PFRho_     = iConfig.getUntrackedParameter<edm::InputTag>("ak5PFRho");
-  EB_LAYER_     = iConfig.getUntrackedParameter<double>("EB_LAYER",7.5);
-  EE_LAYER_     = iConfig.getUntrackedParameter<double>("EE_LAYER",3.5);
+  EB_LAYER_     = iConfig.getUntrackedParameter<double>("EB_LAYER",7);
+  EE_LAYER_     = iConfig.getUntrackedParameter<double>("EE_LAYER",13);
   smearing_     = iConfig.getUntrackedParameter<double>("smearing", 0.03);
   isNOPUHgg_    = iConfig.getUntrackedParameter<bool>("isNOPUHgg");
   WannaFitT0Vtx_= iConfig.getUntrackedParameter<bool>("WannaFitT0Vtx");
@@ -385,7 +385,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   if ( ! SimVtx.isValid() ) {
     edm::LogWarning("SimVtxSummary") << "SimVtx not found";
   }
-  FTool_->Inizialization( SimVtx, EB_LAYER_, EE_LAYER_ );
+  FTool_->Inizialization( SimVtx, EB_LAYER_+0.5, EE_LAYER_*0.4-0.075-0.25 );
   GlobalPoint Vtx_sim( FTool_->GiveVtxX(), FTool_->GiveVtxY(), FTool_->GiveVtxZ() );
   float T0_Vtx_MC = FTool_->GiveT0();
   h_T0->Fill( T0_Vtx_MC );
@@ -663,7 +663,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 			seedHit = &rhEB;
 			EBDetId idEB(rhEB.id());
 			const CaloCellGeometry* cell=geometry_->getGeometry(idEB);
-			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_ );
+			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_+0.5 );
 		    }
 		  }
 		}
@@ -685,7 +685,7 @@ void Generic_Analizer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 			seedHit = &rhEE;
 			EKDetId idEE(rhEE.id());
 			const CaloCellGeometry* cell=geometry_->getGeometry(idEE);
-			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
+			seedHitPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_*0.4-0.075-0.25 );
 		    }
 		  } 
 		}
@@ -1095,7 +1095,7 @@ float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm
 		  seedHit = &rhEB;
 		  EBDetId IdXtal( seedID );
 		  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-		  PFPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_ );
+		  PFPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_+0.5 );
 		}
 	    }
 	  }
@@ -1105,7 +1105,7 @@ float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm
 		  seedHit = &rhEE;
 		  EKDetId IdXtal( seedID );
 		  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-		  PFPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
+		  PFPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_*0.4-0.075-0.25 );
 		}
 	    }
 	  }
@@ -1149,12 +1149,12 @@ float Generic_Analizer::Compute_PUfrac( reco::PFCandidate pfcan, edm::Handle<edm
 	    if( fabs(pfcan.p4().Eta())<1.476 ){
 		EBDetId IdXtal( My_id );
 		const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-		RecPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_ );
+		RecPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EB_LAYER_+0.5 );
 	    }
 	    else{
 		EKDetId IdXtal( My_id );
 		const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-		RecPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_ );
+		RecPos = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( EE_LAYER_*0.4-0.075-0.25 );
 	    }
 	    float time = My_rec->time();
 	    float deltaEr = DeltaR( V_PFPos[nClu].eta(), RecPos.eta(), V_PFPos[nClu].phi(), RecPos.phi() );
@@ -1366,7 +1366,7 @@ std::vector<float> Generic_Analizer::GetSeedFromSC( bool isEB, reco::PFCandidate
 	if( isEB ){
 	  EBDetId IdXtal(  V_seeds[nClu].id() );
 	  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-	  GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( atZero ? 0: EB_LAYER_ );
+	  GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( atZero ? 0: EB_LAYER_+0.5 );
 	  S_Eta = PosRechit.eta();
 	  S_Phi = PosRechit.phi();
 	  S_Pt  = V_seeds[nClu].energy()/cosh(  PosRechit.eta() );
@@ -1386,7 +1386,7 @@ std::vector<float> Generic_Analizer::GetSeedFromSC( bool isEB, reco::PFCandidate
 	else{
 	  EKDetId IdXtal(  V_seeds[nClu].id() );
 	  const CaloCellGeometry* cell=geometry_->getGeometry(IdXtal);
-	  GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( atZero ? 0: EE_LAYER_ );
+	  GlobalPoint PosRechit = ( dynamic_cast<const TruncatedPyramid*>(cell) )->getPosition( atZero ? 0: EE_LAYER_*0.4-0.075-0.25 );
 	  S_Eta = PosRechit.eta();
 	  S_Phi = PosRechit.phi();
 	  S_Pt  = V_seeds[nClu].energy()/cosh(  PosRechit.eta() );

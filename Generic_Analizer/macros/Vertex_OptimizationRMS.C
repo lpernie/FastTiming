@@ -69,6 +69,7 @@ void Vertex_OptimizationRMS( TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF"
 	h1->GetQuantiles(2, quant, value);
 	float Max = quant[0], Min = quant[1];
 	h1->GetXaxis()->SetRangeUser(Min, Max);
+	if( i>25 && T0Free ) h1->Rebin(2);
 //	if(i==6  && OnlyEB==2 )  h1->GetXaxis()->SetRangeUser(-0.3, 0.3);
 //	if(i==6  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
 //	if(i==10  && OnlyEB==2 && XminXmax) h1->GetXaxis()->SetRangeUser(-1., 1.);
@@ -92,7 +93,8 @@ void Vertex_OptimizationRMS( TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF"
 	MyRms->SetParName(2,"Sigma");           MyRms->SetParameters(2, 0.02 + (index*1*0.01) );
 	h1->Fit("MyRms");
 	index++;
-	VtxRMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
+	//VtxRMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
+	VtxRMS->SetBinContent( i+1,MyRms->GetParameter(2) );
 	VtxRMS->SetBinError( i+1, h1->GetRMSError() );
 	stringstream Ind; Ind << i; string Indst = Ind.str(); h1->Draw(); Hname = OutPutFolder + "/VTXRMS_" + TString(Indst)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 	delete h1;
@@ -108,7 +110,7 @@ void Vertex_OptimizationRMS( TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF"
   float xmin(0.45), yhi(0.80), ypass(0.05);
   sprintf(line,"Int: %.2f [cm]", Mypol1->GetParameter(0) );
   lat.DrawLatex(xmin,yhi-ypass, line);
-  sprintf(line,"Coeff: %.2f", Mypol1->GetParameter(1) );
+  sprintf(line,"Coeff: %.4f", Mypol1->GetParameter(1) );
   lat.DrawLatex(xmin,yhi-2.*ypass, line );
   Hname = OutPutFolder + "/Correl_Resol_Vtx_prfRMS.png";
   gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );
@@ -140,7 +142,8 @@ void Vertex_OptimizationRMS( TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF"
 	MyRms->SetParName(1,"Mean");            MyRms->SetParameters(1, 0.);
 	MyRms->SetParName(2,"Sigma");
 	h1->Fit("MyRms");
-	T0RMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
+	//T0RMS->SetBinContent( i+1, Makemin( h1->GetRMS(), MyRms->GetParameter(2)) );
+	T0RMS->SetBinContent( i+1, MyRms->GetParameter(2) );
 	T0RMS->SetBinError( i+1, h1->GetRMSError() );
 	stringstream Ind; Ind << i; string Indstr = Ind.str(); h1->Draw(); Hname = OutPutFolder + "/T0RMS_" + TString(Indstr)  + ".png"; gStyle->SetOptStat(1111); myc1->SaveAs( Hname.Data() );
 	delete h1;
@@ -155,7 +158,7 @@ void Vertex_OptimizationRMS( TString OutPutFolder="VTX_Output_EBEE_T0Free_noVBF"
   lat2.SetNDC(); lat2.SetTextSize(0.040); lat2.SetTextColor(1);
   sprintf(line2,"Int: %.2f [ns]", Mypol2->GetParameter(0) );
   lat2.DrawLatex(xmin,yhi-ypass, line2);
-  sprintf(line2,"Coeff: %.2f", Mypol2->GetParameter(1) );
+  sprintf(line2,"Coeff: %.4f", Mypol2->GetParameter(1) );
   lat2.DrawLatex(xmin,yhi-2.*ypass, line2 );
   Hname = OutPutFolder + "/Correl_Resol_T0_prfRMS.png";
   gStyle->SetOptStat(0); myc1->SaveAs( Hname.Data() );
